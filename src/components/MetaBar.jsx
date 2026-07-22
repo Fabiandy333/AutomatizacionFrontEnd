@@ -2,6 +2,7 @@ export default function MetaBar({ meta }) {
   if (!meta) return null
 
   const items = [
+    { label: 'Url', value: meta.url },
     { label: 'Celular de pruebas', value: meta.celularPruebas },
     { label: 'Recepcionador', value: meta.recepcionador },
     { label: 'Correo recepcionador', value: meta.correoRecepcionador },

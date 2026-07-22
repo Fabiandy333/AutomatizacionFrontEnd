@@ -1,4 +1,5 @@
 import loteriaValleSoporte from './loteria-valle-soporte.json'
+import pasaporte from './pasaporte.json'
 
 // Cada "plan" representa un archivo de casos de prueba (uno por hoja/CSV
 // exportado del plan de pruebas). Para agregar un nuevo plan:
@@ -21,7 +22,8 @@ export const projects = [
       {
         id: 'pasaportes',
         nombre: 'Pasaportes',
-        planes: [], // pendiente de cargar el plan de casos
+        planes: [{ id: 'flujo-agendamiento', nombre: 'Flujo agendamiento', data: pasaporte }], 
+        // pendiente de cargar el plan de casos
       },
     ],
   },

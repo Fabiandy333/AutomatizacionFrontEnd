@@ -34,12 +34,19 @@ export default function App() {
   }
 
   // Simula la ejecucion de un caso de prueba. En un backend real, esto
-  // dispararia una llamada HTTP que corre el script de Playwright
-  // correspondiente y transmite el log por WebSocket/SSE.
-  function runCase(seccion, caso, idx) {
+  // dispararia una llamada HTTP (POST con configPayload en el body) que
+  // corre el script de Playwright correspondiente y transmite el log por
+  // WebSocket/SSE. configPayload es el JSON que el usuario confirmo en el
+  // modal de configuracion (o la ultima version ya confirmada).
+  function runCase(seccion, caso, idx, configPayload) {
     const key = `${seccion.nombre}-${caso.id}-${idx}`
     setLiveStatuses((prev) => ({ ...prev, [key]: 'running' }))
     appendLog(`Iniciando ${caso.id} - ${caso.criterio}`)
+
+    if (configPayload) {
+      const registros = Array.isArray(configPayload) ? configPayload.length : 1
+      appendLog(`Payload recibido: ${registros} registro(s) -> POST /api/run/${caso.id}`)
+    }
 
     setTimeout(() => {
       appendLog(`Ejecutando pasos: ${caso.pasos.split('\n')[0]}`)

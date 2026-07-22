@@ -35,6 +35,6 @@ Thumbs.db
 *.sw?
 
 # Archivos Data
-/data/*
+src/data/*
 # No ignorar este archivo específico
-!/data/projects.js
+!src/data/projects.js
