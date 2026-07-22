@@ -1,0 +1,6 @@
+{
+  "meta": { "recepcionador": "...", "celularPruebas": "..." },
+  "secciones": [
+    { "nombre": "Validacion de ingreso por WhatsApp", "casos": [ { "id": "LDV-QA-01", "criterio": "...", "pasos": "...", "estado": "EXITOSO"} ] }
+  ]
+}
