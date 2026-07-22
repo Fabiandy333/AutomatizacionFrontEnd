@@ -19,7 +19,7 @@ export default function TestSection({ seccion, liveStatuses, onRunCase }) {
             key={`${caso.id}-${idx}`}
             caso={caso}
             liveStatus={liveStatuses[`${seccion.nombre}-${caso.id}-${idx}`]}
-            onRun={() => onRunCase(seccion, caso, idx)}
+            onRun={(casoRef, configPayload) => onRunCase(seccion, casoRef, idx, configPayload)}
           />
         ))}
       </div>

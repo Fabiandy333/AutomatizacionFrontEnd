@@ -1,6 +1,19 @@
 {
-  "meta": { "recepcionador": "...", "celularPruebas": "..." },
-  "secciones": [
-    { "nombre": "Validacion de ingreso por WhatsApp", "casos": [ { "id": "LDV-QA-01", "criterio": "...", "pasos": "...", "estado": "EXITOSO"} ] }
-  ]
+    "meta": {
+        "url": "https://passports.appoloatiende.com/home/agendar",
+        "celularPruebas": "..."
+    },
+    "secciones": [
+        {
+            "nombre": "Validación agendamiento de citas",
+            "casos": [
+                {
+                    "id": "PST-QA-01",
+                    "criterio": "Usuario agenda una cita exitosamente",
+                    "pasos": "1. Ingresar al modulo de agendamiento de cita.\n2. Ingresar el tipo de documento*,número de documento*, nombre completo*, tipo de solicitud*, numero de celular*,numero de telefono fijo, dirección*, correo electronico*,confirmación del correo,fecha de pago (Dia en que realizo el pago), seleccionar si trae acompañante si -> (seleccionar el tipo de parentesco, numero de identificación y nombre y apellido)\n3. Dar click para aceptar politicas(Posible Captchat).\n4. Click en el boton 'Validar correo electronico'.\n5. Ingresar codigo llegado al correo electronico.\n6. Click en el boton 'Validar codigo'.\n7. Click en el boton 'Siguiente'.\n8. .......",
+                    "estado": "EXITOSO"
+                }
+            ]
+        }
+    ]
 }

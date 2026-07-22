@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import ConfigModal from './ConfigModal'
+import defaultConfigTemplate from '../data/templates/agendamiento-pasaportes.js'
 
 // Mapea el estado tal como viene del CSV (EXITOSO / FALLIDO) al estado
 // visual de la corrida en vivo. Si el usuario ya ejecuto el script en esta
@@ -12,10 +14,25 @@ function resolveBadge(estadoHistorico, liveStatus) {
   return { text: 'Sin ejecutar', cls: 'idle' }
 }
 
+// caso.configTemplate permite que cada caso traiga su propia plantilla
+// (por ejemplo, un caso de "Agendar cita" trae la lista de usuarios a
+// agendar). Si el caso no define una, se usa la plantilla generica
+// importada arriba como valor por defecto.
 export default function CaseRow({ caso, liveStatus, onRun }) {
   const [open, setOpen] = useState(false)
+  const [configOpen, setConfigOpen] = useState(false)
+  // "config" guarda la ultima version confirmada por el usuario en esta sesion,
+  // para que el boton de play (sin pasar por el modal) reutilice lo ya revisado.
+  const [config, setConfig] = useState(caso.configTemplate ?? defaultConfigTemplate)
+
   const badge = resolveBadge(caso.estado, liveStatus)
   const isRunning = liveStatus === 'running'
+
+  function handleConfirmConfig(parsedJson) {
+    setConfig(parsedJson)
+    setConfigOpen(false)
+    onRun(caso, parsedJson)
+  }
 
   return (
     <div className="case-row">
@@ -37,14 +54,27 @@ export default function CaseRow({ caso, liveStatus, onRun }) {
           {caso.responsableEjecucion || '-'}
         </span>
 
-        <button
-          className="run-btn"
-          aria-label={`Ejecutar ${caso.id}`}
-          disabled={isRunning}
-          onClick={() => onRun(caso)}
-        >
-          <span className="icon-play" />
-        </button>
+        <div style={{ display: 'flex', gap: 6 }}>
+          <button
+            className="run-btn"
+            aria-label={`Configurar datos de ${caso.id}`}
+            title="Ver y editar los datos antes de ejecutar"
+            disabled={isRunning}
+            onClick={() => setConfigOpen(true)}
+          >
+            <span className="icon-config" />
+          </button>
+
+          <button
+            className="run-btn"
+            aria-label={`Ejecutar ${caso.id}`}
+            title="Ejecutar con la ultima configuracion confirmada"
+            disabled={isRunning}
+            onClick={() => onRun(caso, config)}
+          >
+            <span className="icon-play" />
+          </button>
+        </div>
       </div>
 
       {open && (
@@ -60,6 +90,15 @@ export default function CaseRow({ caso, liveStatus, onRun }) {
           )}
         </div>
       )}
+
+      <ConfigModal
+        isOpen={configOpen}
+        title={`Configuracion de ejecucion - ${caso.id}`}
+        description={`Estos son los datos que se enviaran al backend para ejecutar "${caso.criterio || caso.id}". Revisalos y edita lo que necesites antes de iniciar; el backend los recibira tal como queden aqui.`}
+        initialData={config}
+        onClose={() => setConfigOpen(false)}
+        onConfirm={handleConfirmConfig}
+      />
     </div>
   )
 }
