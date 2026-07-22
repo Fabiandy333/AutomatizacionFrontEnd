@@ -1,0 +1,35 @@
+# Dependencias
+/node_modules
+/.pnp
+.pnp.js
+
+# Construcción de Vite (Archivos generados en producción)
+/dist
+/dist-ssr
+
+# Dependencias locales de compilación (opcional)
+.local
+.output
+.env.local
+.env.*.local
+
+# Archivos de depuración y registros
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+package-lock.json
+pnpm-lock.yaml
+
+# Archivos temporales de Editores y Sistemas Operativos
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/extensions.json
+.idea
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
