@@ -9,7 +9,9 @@ export default function TestSection({ seccion, liveStatuses, onRunCase }) {
       <div className="section-header">
         <h2>{seccion.nombre}</h2>
         <span className="case-ids">
-          {firstId}{lastId && lastId !== firstId ? ` - ${lastId}` : ''} ({seccion.casos.length})
+          {firstId}
+          {lastId && lastId !== firstId ? ` - ${lastId}` : ""} (
+          {seccion.casos.length})
         </span>
       </div>
 
@@ -19,10 +21,14 @@ export default function TestSection({ seccion, liveStatuses, onRunCase }) {
             key={`${caso.id}-${idx}`}
             caso={caso}
             liveStatus={liveStatuses[`${seccion.nombre}-${caso.id}-${idx}`]}
-            onRun={(casoRef, configPayload) => onRunCase(seccion, casoRef, idx, configPayload)}
+            configTemplate={seccion.configTemplate}
+            configEndpoint={seccion.configEndpoint}
+            onRun={(casoRef, configPayload) =>
+              onRunCase(seccion, casoRef, idx, configPayload)
+            }
           />
         ))}
       </div>
     </section>
-  )
+  );
 }
