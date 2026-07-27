@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import ConfigModal from './ConfigModal'
 import OtpModal from './OtpModal'
+import LiveScreenViewer from './LiveScreenViewer'
 
  const API_BASE = 'http://localhost:3000/api/pasaportes'
  const POLL_INTERVAL_MS = 3000
@@ -30,6 +31,7 @@ export default function CaseRow({ caso, liveStatus, configTemplate, configEndpoi
   const [ejecucionesActivas, setEjecucionesActivas] = useState([]) // [{ executionId, email, estado }]
   const [otpActivo, setOtpActivo] = useState(null) // { executionId, email } | null
   const [isExecuting, setIsExecuting] = useState(false) // Para desabilitar el boton mientras se ejecuta
+  const [verPantalla, setVerPantalla] = useState(false)
 
   const badge = resolveBadge(caso.estado, liveStatus)
   const isRunning = liveStatus === 'running'
@@ -218,6 +220,22 @@ export default function CaseRow({ caso, liveStatus, configTemplate, configEndpoi
           )}
         </div>
       )}
+      {ejecucionesActivas.length > 0 && (
+  <div style={{ padding: '0 16px 12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+    <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text-secondary)' }}>
+      <input
+        type="checkbox"
+        checked={verPantalla}
+        onChange={(e) => setVerPantalla(e.target.checked)}
+      />
+      Ver pantalla en vivo
+    </label>
+
+    {verPantalla && (
+      <LiveScreenViewer executionId={ejecucionesActivas[0].executionId} />
+    )}
+  </div>
+)}
 
       <ConfigModal
         isOpen={configOpen}
