@@ -23,8 +23,8 @@ export default function TestSection({ seccion, liveStatuses, onRunCase }) {
             liveStatus={liveStatuses[`${seccion.nombre}-${caso.id}-${idx}`]}
             configTemplate={seccion.configTemplate}
             configEndpoint={seccion.configEndpoint}
-            onRun={(casoRef, configPayload) =>
-              onRunCase(seccion, casoRef, idx, configPayload)
+            onRun={(casoRef, configPayload, backendInfo) =>
+              onRunCase(seccion, casoRef, idx, configPayload, backendInfo)
             }
           />
         ))}

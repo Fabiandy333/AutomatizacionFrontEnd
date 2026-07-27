@@ -33,12 +33,8 @@ export default function App() {
     setLogLines((prev) => [...prev, { time: nowTime(), text, type }])
   }
 
-  // Simula la ejecucion de un caso de prueba. En un backend real, esto
-  // dispararia una llamada HTTP (POST con configPayload en el body) que
-  // corre el script de Playwright correspondiente y transmite el log por
-  // WebSocket/SSE. configPayload es el JSON que el usuario confirmo en el
-  // modal de configuracion (o la ultima version ya confirmada).
-  function runCase(seccion, caso, idx, configPayload) {
+  // Ejecuta un caso y se conecta al backend para recibir logs en tiempo real
+  function runCase(seccion, caso, idx, configPayload, backendInfo) {
     const key = `${seccion.nombre}-${caso.id}-${idx}`
     setLiveStatuses((prev) => ({ ...prev, [key]: 'running' }))
     appendLog(`Iniciando ${caso.id} - ${caso.criterio}`)
@@ -48,21 +44,49 @@ export default function App() {
       appendLog(`Payload recibido: ${registros} registro(s) -> POST /api/run/${caso.id}`)
     }
 
-    setTimeout(() => {
-      appendLog(`Ejecutando pasos: ${caso.pasos.split('\n')[0]}`)
-    }, 400)
+    // Obtén el executionId del backendInfo si está disponible
+    const executionId = backendInfo?.executionId || backendInfo?.ejecuciones?.[0]?.executionId;
 
-    setTimeout(() => {
-      // Si el ultimo estado historico fue FALLIDO, se simula que sigue fallando
-      // (hasta que un backend real confirme lo contrario)
-      const willFail = caso.estado === 'FALLIDO'
-      const finalStatus = willFail ? 'fail' : 'pass'
-      setLiveStatuses((prev) => ({ ...prev, [key]: finalStatus }))
-      appendLog(
-        `${finalStatus === 'pass' ? 'Caso exitoso' : 'Caso fallido'}: ${caso.id}`,
-        finalStatus === 'pass' ? 'ok' : 'fail'
-      )
-    }, 1100)
+    if (executionId) {
+      // Conectarse a los logs en tiempo real del backend
+      connectToLogs(executionId, key, caso.id);
+    }
+  }
+
+  // Conecta a los logs en tiempo real del backend mediante SSE
+  function connectToLogs(executionId, statusKey, caseId) {
+    const eventSource = new EventSource(`http://localhost:3000/api/pasaportes/${executionId}/logs`);
+
+    eventSource.onmessage = (event) => {
+      try {
+        const logEntry = JSON.parse(event.data);
+        appendLog(logEntry.text || event.data, logEntry.type || 'info');
+      } catch {
+        appendLog(event.data, 'info');
+      }
+    };
+
+    eventSource.onerror = (error) => {
+      console.error('Error en conexión de logs:', error);
+      
+      // Intentar obtener el estado final del backend
+      fetch(`http://localhost:3000/api/pasaportes/${executionId}/estado`)
+        .then(res => res.json())
+        .then(data => {
+          const finalStatus = data.estado === 'exitoso' ? 'pass' : data.estado === 'fallido' ? 'fail' : 'fail';
+          setLiveStatuses((prev) => ({ ...prev, [statusKey]: finalStatus }));
+          appendLog(
+            `${finalStatus === 'pass' ? 'Caso exitoso' : 'Caso fallido'}: ${caseId}`,
+            finalStatus === 'pass' ? 'ok' : 'fail'
+          );
+        })
+        .catch(err => {
+          console.error('Error al obtener estado:', err);
+          appendLog(`Error: No se pudo conectar a los logs de ${caseId}`, 'fail');
+          setLiveStatuses((prev) => ({ ...prev, [statusKey]: 'fail' }));
+        })
+        .finally(() => eventSource.close());
+    };
   }
 
   function runAllVisible() {
@@ -71,7 +95,7 @@ export default function App() {
     let delay = 0
     selectedPlan.data.secciones.forEach((seccion) => {
       seccion.casos.forEach((caso, idx) => {
-        setTimeout(() => runCase(seccion, caso, idx), delay)
+        setTimeout(() => runCase(seccion, caso, idx, null, null), delay)
         delay += 1400
       })
     })
