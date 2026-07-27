@@ -29,6 +29,7 @@ export default function CaseRow({ caso, liveStatus, configTemplate, configEndpoi
   const [config, setConfig] = useState(caso.configTemplate ?? configTemplate ?? {})
   const [ejecucionesActivas, setEjecucionesActivas] = useState([]) // [{ executionId, email, estado }]
   const [otpActivo, setOtpActivo] = useState(null) // { executionId, email } | null
+  const [isExecuting, setIsExecuting] = useState(false) // Para desabilitar el boton mientras se ejecuta
 
   const badge = resolveBadge(caso.estado, liveStatus)
   const isRunning = liveStatus === 'running'
@@ -47,7 +48,45 @@ export default function CaseRow({ caso, liveStatus, configTemplate, configEndpoi
          : [{ executionId: backendInfo.executionId, email: backendInfo.email, estado: 'pendiente' }]
        setEjecucionesActivas(nuevas)
      }
+  }
 
+  // Ejecuta directamente con la configuracion guardada, enviando al backend primero
+  async function handleDirectRun() {
+    const endpoint = caso.configEndpoint ?? configEndpoint;
+    
+    if (!endpoint) {
+      // Si no hay endpoint, ejecuta directamente sin backendInfo
+      onRun(caso, config);
+      return;
+    }
+
+    setIsExecuting(true);
+    try {
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(config),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || `El servidor respondio ${response.status}`);
+      }
+      const backendInfo = data;
+      onRun(caso, config, backendInfo);
+
+      // Arma la lista de ejecuciones a monitorear
+      if (backendInfo) {
+        const nuevas = backendInfo.ejecuciones
+          ? backendInfo.ejecuciones.map((e) => ({ executionId: e.executionId, email: e.email, estado: 'pendiente' }))
+          : [{ executionId: backendInfo.executionId, email: backendInfo.email, estado: 'pendiente' }];
+        setEjecucionesActivas(nuevas);
+      }
+    } catch (error) {
+      console.error('Error al ejecutar:', error);
+      alert('Error al ejecutar: ' + error.message);
+    } finally {
+      setIsExecuting(false);
+    }
   }
 // Poll del estado de cada ejecucion activa. Cuando alguna llega a
    // "esperando_otp" y todavia no se le mostro el modal, lo abre.
@@ -139,8 +178,8 @@ export default function CaseRow({ caso, liveStatus, configTemplate, configEndpoi
             className="run-btn"
             aria-label={`Ejecutar ${caso.id}`}
             title="Ejecutar con la ultima configuracion confirmada"
-            disabled={isRunning}
-            onClick={() => onRun(caso, config)}
+            disabled={isRunning || isExecuting}
+            onClick={handleDirectRun}
           >
             <span className="icon-play" />
           </button>
