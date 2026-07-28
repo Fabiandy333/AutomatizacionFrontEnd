@@ -2,9 +2,9 @@ import { useState, useEffect } from 'react'
 import ConfigModal from './ConfigModal'
 import OtpModal from './OtpModal'
 import LiveScreenViewer from './LiveScreenViewer'
+import { API_ENDPOINTS } from '../config/api'
 
- const API_BASE = 'http://localhost:3000/api/pasaportes'
- const POLL_INTERVAL_MS = 3000
+const POLL_INTERVAL_MS = 3000
 
 // Mapea el estado tal como viene del CSV (EXITOSO / FALLIDO) al estado
 // visual de la corrida en vivo. Si el usuario ya ejecuto el script en esta
@@ -98,7 +98,7 @@ export default function CaseRow({ caso, liveStatus, configTemplate, configEndpoi
        const actualizadas = await Promise.all(
          ejecucionesActivas.map(async (ej) => {
            try {
-             const res = await fetch(`${API_BASE}/${ej.executionId}/estado`)
+             const res = await fetch(API_ENDPOINTS.PASAPORTES_ESTADO(ej.executionId))
              const data = await res.json()
              return { ...ej, estado: data.estado }
            } catch {
@@ -250,7 +250,7 @@ export default function CaseRow({ caso, liveStatus, configTemplate, configEndpoi
        isOpen={!!otpActivo}
        email={otpActivo?.email}
        executionId={otpActivo?.executionId}
-       apiBase={API_BASE}
+       apiBase={API_ENDPOINTS.PASAPORTES_BASE}
        onClose={() => setOtpActivo(null)}
        onSubmitted={() => setOtpActivo(null)}
      />
