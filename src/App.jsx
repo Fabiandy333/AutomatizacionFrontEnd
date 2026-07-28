@@ -4,6 +4,7 @@ import MetaBar from './components/MetaBar'
 import TestSection from './components/TestSection'
 import LogPanel from './components/LogPanel'
 import { projects, contarCasos } from './data/projects'
+import { API_ENDPOINTS } from './config/api'
 
 // Todos los planes disponibles en orden plano, para poder seleccionar
 // el primero por defecto al cargar la app.
@@ -55,7 +56,7 @@ export default function App() {
 
   // Conecta a los logs en tiempo real del backend mediante SSE
   function connectToLogs(executionId, statusKey, caseId) {
-    const eventSource = new EventSource(`http://localhost:3000/api/pasaportes/${executionId}/logs`);
+    const eventSource = new EventSource(API_ENDPOINTS.PASAPORTES_LOGS(executionId));
 
     eventSource.onmessage = (event) => {
       try {
@@ -70,7 +71,7 @@ export default function App() {
       console.error('Error en conexión de logs:', error);
       
       // Intentar obtener el estado final del backend
-      fetch(`http://localhost:3000/api/pasaportes/${executionId}/estado`)
+      fetch(API_ENDPOINTS.PASAPORTES_ESTADO(executionId))
         .then(res => res.json())
         .then(data => {
           const finalStatus = data.estado === 'exitoso' ? 'pass' : data.estado === 'fallido' ? 'fail' : 'fail';
