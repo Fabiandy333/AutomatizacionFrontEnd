@@ -22,6 +22,15 @@ function resolveBadge(estadoHistorico, liveStatus) {
 // (por ejemplo, un caso de "Agendar cita" trae la lista de usuarios a
 // agendar). Si el caso no define una, se usa la plantilla generica
 // importada arriba como valor por defecto.
+function resolveExecutionId(exec) {
+  return exec?.executionId || exec?.id || exec?._id || exec?.uuid || null
+}
+
+function normalizeStatus(status) {
+  if (!status) return ''
+  return status.toString().trim().toLowerCase()
+}
+
 export default function CaseRow({ caso, liveStatus, configTemplate, configEndpoint, onRun }) {
   const [open, setOpen] = useState(false)
   const [configOpen, setConfigOpen] = useState(false)
@@ -246,14 +255,14 @@ export default function CaseRow({ caso, liveStatus, configTemplate, configEndpoi
         onClose={() => setConfigOpen(false)}
         onConfirm={handleConfirmConfig}
       />
-     <OtpModal
-       isOpen={!!otpActivo}
-       email={otpActivo?.email}
-       executionId={otpActivo?.executionId}
-       apiBase={API_ENDPOINTS.PASAPORTES_BASE}
-       onClose={() => setOtpActivo(null)}
-       onSubmitted={() => setOtpActivo(null)}
-     />
+      <OtpModal
+        isOpen={!!otpActivo}
+        email={otpActivo?.email}
+        executionId={otpActivo?.executionId}
+        apiBase={API_ENDPOINTS.PASAPORTES_BASE}
+        onClose={() => setOtpActivo(null)}
+        onSubmitted={() => setOtpActivo(null)}
+      />
     </div>
-  );
+  )
 }
