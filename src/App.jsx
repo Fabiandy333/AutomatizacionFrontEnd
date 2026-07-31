@@ -4,7 +4,7 @@ import MetaBar from './components/MetaBar'
 import TestSection from './components/TestSection'
 import LogPanel from './components/LogPanel'
 import { projects, contarCasos } from './data/projects'
-import { API_ENDPOINTS } from './config/api'
+import { apiFetch, API_ENDPOINTS, API_TOKEN } from './config/api'
 
 function findFirstPlan() {
   for (const project of projects) {
@@ -50,7 +50,7 @@ export default function App() {
         if (isFinished(entry.status)) return entry
 
         try {
-          const response = await fetch(API_ENDPOINTS.PASAPORTES_ESTADO(entry.executionId))
+          const response = await apiFetch(API_ENDPOINTS.PASAPORTES_ESTADO(entry.executionId))
           const data = await response.json()
           const status = (data.estado || data.status || data.state || '').toString().trim().toLowerCase()
           return { ...entry, status: status || entry.status }
@@ -82,7 +82,8 @@ export default function App() {
 
   function connectToLogs(executionId, statusKey, caseId) {
     eventSourcesRef.current.get(statusKey)?.close()
-    const eventSource = new EventSource(API_ENDPOINTS.PASAPORTES_LOGS(executionId))
+    const tokenQuery = API_TOKEN ? `?token=${encodeURIComponent(API_TOKEN)}` : ''
+    const eventSource = new EventSource(`${API_ENDPOINTS.PASAPORTES_LOGS(executionId)}${tokenQuery}`)
     eventSourcesRef.current.set(statusKey, eventSource)
 
     eventSource.onmessage = (event) => {
@@ -149,7 +150,7 @@ export default function App() {
         }
 
         try {
-          const response = await fetch(endpoint, {
+          const response = await apiFetch(endpoint, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),

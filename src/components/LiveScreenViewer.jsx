@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { io } from 'socket.io-client'
-import API_BASE_URL from '../config/api'
+import API_BASE_URL, { API_TOKEN } from '../config/api'
 
 const SOCKET_URL = API_BASE_URL || window.location.origin
 
@@ -15,7 +15,7 @@ export default function LiveScreenViewer({ executionId }) {
   const socketRef = useRef(null)
 
   useEffect(() => {
-    const socket = io(SOCKET_URL)
+    const socket = io(SOCKET_URL, { auth: { token: API_TOKEN }, transports: ['websocket'] })
     socketRef.current = socket
 
     socket.emit('suscribirse-stream', { executionId })

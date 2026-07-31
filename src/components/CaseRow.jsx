@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import ConfigModal from './ConfigModal'
 import OtpModal from './OtpModal'
 import LiveScreenViewer from './LiveScreenViewer'
-import { API_ENDPOINTS } from '../config/api'
+import { apiFetch, API_ENDPOINTS } from '../config/api'
 
 const POLL_INTERVAL_MS = 3000
 
@@ -73,7 +73,7 @@ export default function CaseRow({ caso, liveStatus, configTemplate, configEndpoi
 
     setIsExecuting(true);
     try {
-      const response = await fetch(endpoint, {
+      const response = await apiFetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(config),
@@ -107,7 +107,7 @@ export default function CaseRow({ caso, liveStatus, configTemplate, configEndpoi
        const actualizadas = await Promise.all(
          ejecucionesActivas.map(async (ej) => {
            try {
-             const res = await fetch(API_ENDPOINTS.PASAPORTES_ESTADO(ej.executionId))
+             const res = await apiFetch(API_ENDPOINTS.PASAPORTES_ESTADO(ej.executionId))
              const data = await res.json()
              return { ...ej, estado: data.estado }
            } catch {
