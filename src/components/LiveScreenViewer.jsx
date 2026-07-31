@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { io } from 'socket.io-client'
+import API_BASE_URL from '../config/api'
 
-const SOCKET_URL = 'http://localhost:3000'
+const SOCKET_URL = API_BASE_URL || window.location.origin
 
 /**
  * Visor de pantalla EN VIVO de una ejecucion, solo lectura.
