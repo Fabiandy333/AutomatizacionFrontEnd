@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { apiFetch } from '../config/api'
 
 /**
  * Modal generico de "configuracion antes de ejecutar".
@@ -46,7 +47,7 @@ export default function ConfigModal({ isOpen, title, description, initialData, e
 
   setSending(true)
   try {
-    const response = await fetch(endpoint, {
+    const response = await apiFetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(parsed),

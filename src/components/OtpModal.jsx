@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { apiFetch } from '../config/api'
 
 /**
  * Modal para ingresar el codigo OTP que llego al correo del titular.
@@ -19,7 +20,7 @@ export default function OtpModal({ isOpen, email, executionId, apiBase, onClose,
     setEnviando(true)
     setError(null)
     try {
-      const response = await fetch(`${apiBase}/${executionId}/otp`, {
+      const response = await apiFetch(`${apiBase}/${executionId}/otp`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ codigo: codigo.trim() }),
