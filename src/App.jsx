@@ -24,11 +24,45 @@ export default function App() {
   const [selectedPlan, setSelectedPlan] = useState(findFirstPlan)
   const [liveStatuses, setLiveStatuses] = useState({})
   const [logLines, setLogLines] = useState([])
+  const [activeExecutions, setActiveExecutions] = useState([])
   const logRef = useRef(null)
 
   useEffect(() => {
     if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight
   }, [logLines])
+
+  useEffect(() => {
+    if (activeExecutions.length === 0) return
+
+    const interval = setInterval(async () => {
+      const executionChecks = activeExecutions.map(async (entry) => {
+        if (entry.status !== 'running') return entry
+
+        try {
+          const res = await fetch(API_ENDPOINTS.PASAPORTES_ESTADO(entry.executionId))
+          const data = await res.json()
+          const estado = (data.estado || data.status || data.state || '').toString().trim().toLowerCase()
+          return { ...entry, status: estado || entry.status }
+        } catch {
+          return entry
+        }
+      })
+
+      const updated = await Promise.all(executionChecks)
+      setActiveExecutions(updated)
+
+      updated.forEach((entry) => {
+        if (entry.status === 'exitoso' || entry.status === 'fallido') {
+          setLiveStatuses((prev) => ({
+            ...prev,
+            [entry.key]: entry.status === 'exitoso' ? 'pass' : 'fail',
+          }))
+        }
+      })
+    }, 3000)
+
+    return () => clearInterval(interval)
+  }, [activeExecutions])
 
   function appendLog(text, type = 'info') {
     setLogLines((prev) => [...prev, { time: nowTime(), text, type }])
@@ -45,12 +79,23 @@ export default function App() {
       appendLog(`Payload recibido: ${registros} registro(s) -> POST /api/run/${caso.id}`)
     }
 
-    // Obtén el executionId del backendInfo si está disponible
-    const executionId = backendInfo?.executionId || backendInfo?.ejecuciones?.[0]?.executionId;
+    const executionSource = backendInfo?.ejecuciones?.[0] ?? backendInfo
+    const executionId = executionSource?.executionId || executionSource?.id || executionSource?._id || executionSource?.uuid || null
+    const backendStatus = executionSource?.estado || executionSource?.status || executionSource?.state || null
+
+    if (backendStatus) {
+      const normalized = backendStatus.toString().trim().toLowerCase()
+      if (normalized === 'exitoso' || normalized === 'fallido') {
+        setLiveStatuses((prev) => ({ ...prev, [key]: normalized === 'exitoso' ? 'pass' : 'fail' }))
+      }
+    }
 
     if (executionId) {
-      // Conectarse a los logs en tiempo real del backend
-      connectToLogs(executionId, key, caso.id);
+      setActiveExecutions((prev) => [
+        ...prev.filter((entry) => entry.key !== key),
+        { key, executionId, status: backendStatus?.toString().trim().toLowerCase() || 'running' },
+      ])
+      connectToLogs(executionId, key, caso.id)
     }
   }
 
