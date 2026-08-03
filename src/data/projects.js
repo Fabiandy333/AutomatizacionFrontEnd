@@ -1,5 +1,6 @@
 import loteriaValleSoporte from './loteria-valle-soporte.json'
 import pasaporte from './pasaporte.json'
+import sms from './sms.json'
 import { configTemplatesPorSeccion, endpointsPorSeccion } from './templates'
 
 // Cada "plan" representa un archivo de casos de prueba (uno por hoja/CSV
@@ -46,7 +47,7 @@ export const projects = [
   },
   { id: 'octoplus', nombre: 'Octoplus', planes: [] },
   { id: 'directory', nombre: 'Directory', planes: [] },
-  { id: 'sms', nombre: 'SMS', planes: [] },
+  { id: 'sms', nombre: 'SMS', planes: [ { id: 'flujo-login', nombre: 'Flujo Login', data: conPlantillas(sms) } ] },
   { id: 'smartbot', nombre: 'SmartBot', planes: [] },
   { id: 'tu-viaje', nombre: 'Tu Viaje', planes: [] },
 ]
