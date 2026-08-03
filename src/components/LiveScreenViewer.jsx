@@ -4,11 +4,7 @@ import API_BASE_URL, { API_TOKEN } from '../config/api'
 
 const SOCKET_URL = API_BASE_URL || window.location.origin
 
-/**
- * Visor de pantalla EN VIVO de una ejecucion, solo lectura.
- * No envia clics, teclas ni coordenadas — unicamente muestra los
- * fotogramas que manda el backend.
- */
+
 export default function LiveScreenViewer({ executionId }) {
   const [frame, setFrame] = useState(null)
   const [error, setError] = useState(null)
