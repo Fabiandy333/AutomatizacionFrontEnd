@@ -26,6 +26,9 @@ export const API_ENDPOINTS = {
   PASAPORTES_LOGS: (executionId) => `${API_BASE_URL}/api/pasaportes/${executionId}/logs`,
   PASAPORTES_ESTADO: (executionId) => `${API_BASE_URL}/api/pasaportes/${executionId}/estado`,
   PASAPORTES_OTP: (executionId) => `${API_BASE_URL}/api/pasaportes/${executionId}/otp`,
+
+
+  
 }
 
 export default API_BASE_URL;
