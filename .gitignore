@@ -38,3 +38,4 @@ Thumbs.db
 src/data/*
 # No ignorar este archivo específico
 !src/data/projects.js
+!src/data/templates/index.js
