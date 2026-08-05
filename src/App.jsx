@@ -1,152 +1,160 @@
-import { useEffect, useRef, useState } from 'react'
-import Sidebar from './components/Sidebar'
-import MetaBar from './components/MetaBar'
-import TestSection from './components/TestSection'
-import LogPanel from './components/LogPanel'
-import { projects, contarCasos } from './data/projects'
-import { apiFetch, API_ENDPOINTS, API_TOKEN } from './config/api'
+import { useEffect, useRef, useState } from 'react';
+import Sidebar from './components/Sidebar';
+import MetaBar from './components/MetaBar';
+import TestSection from './components/TestSection';
+import LogPanel from './components/LogPanel';
+import { projects, contarCasos } from './data/projects';
+import { apiFetch, API_ENDPOINTS, API_TOKEN } from './config/api';
 
 function findFirstPlan() {
   for (const project of projects) {
-    const plans = project.subproyectos ? project.subproyectos.flatMap((subproject) => subproject.planes) : project.planes
-    if (plans.length) return plans[0]
+    const plans = project.subproyectos ? project.subproyectos.flatMap((subproject) => subproject.planes) : project.planes;
+    if (plans.length) return plans[0];
   }
-  return null
+  return null;
 }
 
 function nowTime() {
-  return new Date().toLocaleTimeString('es-CO', { hour12: false })
+  return new Date().toLocaleTimeString('es-CO', { hour12: false });
 }
 
 function isFinished(status) {
-  return ['exitoso', 'fallido', 'requiere_revision'].includes(status)
+  return ['exitoso', 'fallido', 'requiere_revision'].includes(status);
 }
 
 function toLiveStatus(status) {
-  return status === 'exitoso' ? 'pass' : 'fail'
+  return status === 'exitoso' ? 'pass' : 'fail';
 }
 
 function executionKey(seccion, caso, idx) {
-  return `${seccion.nombre}-${caso.id}-${idx}`
+  return `${seccion.nombre}-${caso.id}-${idx}`;
 }
 
 export default function App() {
-  const [selectedPlan, setSelectedPlan] = useState(findFirstPlan)
-  const [liveStatuses, setLiveStatuses] = useState({})
-  const [logLines, setLogLines] = useState([])
-  const [activeExecutions, setActiveExecutions] = useState([])
-  const logRef = useRef(null)
-  const eventSourcesRef = useRef(new Map())
+  const [selectedPlan, setSelectedPlan] = useState(findFirstPlan);
+  const [liveStatuses, setLiveStatuses] = useState({});
+  const [logLines, setLogLines] = useState([]);
+  const [activeExecutions, setActiveExecutions] = useState([]);
+  const [sidebarVisible, setSidebarVisible] = useState(true);
+  const [visibleLogSection, setVisibleLogSection] = useState(null);
+  const logRef = useRef(null);
+  const eventSourcesRef = useRef(new Map());
 
   useEffect(() => {
-    if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight
-  }, [logLines])
+    if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
+  }, [logLines]);
 
   useEffect(() => {
-    if (!activeExecutions.some((entry) => !isFinished(entry.status))) return
+    if (!activeExecutions.some((entry) => !isFinished(entry.status))) return undefined;
 
     const interval = setInterval(async () => {
       const updated = await Promise.all(activeExecutions.map(async (entry) => {
-        if (isFinished(entry.status)) return entry
+        if (isFinished(entry.status)) return entry;
 
         try {
-          const response = await apiFetch(API_ENDPOINTS.PASAPORTES_ESTADO(entry.executionId))
-          const data = await response.json()
-          const status = (data.estado || data.status || data.state || '').toString().trim().toLowerCase()
-          return { ...entry, status: status || entry.status }
+          const response = await apiFetch(API_ENDPOINTS.PASAPORTES_ESTADO(entry.executionId));
+          const data = await response.json();
+          const status = (data.estado || data.status || data.state || '').toString().trim().toLowerCase();
+          return { ...entry, status: status || entry.status };
         } catch {
-          return entry
+          return entry;
         }
-      }))
+      }));
 
       updated.forEach((entry) => {
-        if (!isFinished(entry.status)) return
-        eventSourcesRef.current.get(entry.key)?.close()
-        eventSourcesRef.current.delete(entry.key)
-        setLiveStatuses((previous) => ({ ...previous, [entry.key]: toLiveStatus(entry.status) }))
-      })
-      setActiveExecutions(updated.filter((entry) => !isFinished(entry.status)))
-    }, 3000)
+        if (!isFinished(entry.status)) return;
+        eventSourcesRef.current.get(entry.key)?.close();
+        eventSourcesRef.current.delete(entry.key);
+        setLiveStatuses((previous) => ({ ...previous, [entry.key]: toLiveStatus(entry.status) }));
+      });
+        const remaining = updated.filter((entry) => !isFinished(entry.status));
+        setActiveExecutions(remaining);
+        // hide log panel if no active executions remain
+        if (remaining.length === 0) setVisibleLogSection(null);
+    }, 3000);
 
-    return () => clearInterval(interval)
-  }, [activeExecutions])
+    return () => clearInterval(interval);
+  }, [activeExecutions]);
 
-  useEffect(() => () => {
-    eventSourcesRef.current.forEach((source) => source.close())
-    eventSourcesRef.current.clear()
-  }, [])
+  useEffect(() => {
+    return () => {
+      eventSourcesRef.current.forEach((source) => source.close());
+      eventSourcesRef.current.clear();
+    };
+  }, []);
 
   function appendLog(text, type = 'info') {
-    setLogLines((previous) => [...previous, { time: nowTime(), text, type }])
+    setLogLines((previous) => [...previous, { time: nowTime(), text, type }]);
   }
 
   function connectToLogs(executionId, statusKey, caseId) {
-    eventSourcesRef.current.get(statusKey)?.close()
-    const tokenQuery = API_TOKEN ? `?token=${encodeURIComponent(API_TOKEN)}` : ''
-    const eventSource = new EventSource(`${API_ENDPOINTS.PASAPORTES_LOGS(executionId)}${tokenQuery}`)
-    eventSourcesRef.current.set(statusKey, eventSource)
+    eventSourcesRef.current.get(statusKey)?.close();
+    const tokenQuery = API_TOKEN ? `?token=${encodeURIComponent(API_TOKEN)}` : '';
+    const eventSource = new EventSource(`${API_ENDPOINTS.PASAPORTES_LOGS(executionId)}${tokenQuery}`);
+    eventSourcesRef.current.set(statusKey, eventSource);
 
     eventSource.onmessage = (event) => {
       try {
-        const logEntry = JSON.parse(event.data)
-        appendLog(logEntry.text || event.data, logEntry.type || 'info')
+        const logEntry = JSON.parse(event.data);
+        appendLog(logEntry.text || event.data, logEntry.type || 'info');
       } catch {
-        appendLog(event.data, 'info')
+        appendLog(event.data, 'info');
       }
-    }
+    };
 
     eventSource.onerror = () => {
       // EventSource reintenta automáticamente; el polling confirma el estado final.
-      console.warn(`Conexión de logs interrumpida para ${caseId}; reintentando.`)
-    }
+      console.warn(`Conexión de logs interrumpida para ${caseId}; reintentando.`);
+    };
   }
 
   // Registra una ejecución ya creada por el backend y conecta sus actualizaciones.
   function runCase(seccion, caso, idx, configPayload, backendInfo) {
-    const key = executionKey(seccion, caso, idx)
-    setLiveStatuses((previous) => ({ ...previous, [key]: 'running' }))
-    appendLog(`Iniciando ${caso.id} - ${caso.criterio}`)
+    const key = executionKey(seccion, caso, idx);
+    setLiveStatuses((previous) => ({ ...previous, [key]: 'running' }));
+    appendLog(`Iniciando ${caso.id} - ${caso.criterio}`);
 
     if (configPayload) {
-      const records = Array.isArray(configPayload) ? configPayload.length : 1
-      appendLog(`Payload recibido: ${records} registro(s)`)
+      const records = Array.isArray(configPayload) ? configPayload.length : 1;
+      appendLog(`Payload recibido: ${records} registro(s)`);
     }
 
-    const execution = backendInfo?.ejecuciones?.[0] ?? backendInfo
-    const executionId = execution?.executionId || execution?.id || execution?._id || execution?.uuid
-    const status = (execution?.estado || execution?.status || execution?.state || 'running').toString().trim().toLowerCase()
+    const execution = backendInfo?.ejecuciones?.[0] ?? backendInfo;
+    const executionId = execution?.executionId || execution?.id || execution?._id || execution?.uuid;
+    const status = (execution?.estado || execution?.status || execution?.state || 'running').toString().trim().toLowerCase();
 
     if (isFinished(status)) {
-      setLiveStatuses((previous) => ({ ...previous, [key]: toLiveStatus(status) }))
-      return
+      setLiveStatuses((previous) => ({ ...previous, [key]: toLiveStatus(status) }));
+      return;
     }
     if (!executionId) {
-      appendLog(`El backend no devolvió un identificador de ejecución para ${caso.id}`, 'fail')
-      setLiveStatuses((previous) => ({ ...previous, [key]: 'fail' }))
-      return
+      appendLog(`El backend no devolvió un identificador de ejecución para ${caso.id}`, 'fail');
+      setLiveStatuses((previous) => ({ ...previous, [key]: 'fail' }));
+      return;
     }
 
     setActiveExecutions((previous) => [
       ...previous.filter((entry) => entry.key !== key),
       { key, executionId, status },
-    ])
-    connectToLogs(executionId, key, caso.id)
+    ]);
+    setVisibleLogSection(seccion.nombre);
+    connectToLogs(executionId, key, caso.id);
   }
 
   async function runAllVisible() {
-    if (!selectedPlan?.data?.secciones) return
-    appendLog(`Ejecutando plan completo: ${selectedPlan.nombre}`)
+    if (!selectedPlan?.data?.secciones) return;
+    appendLog(`Ejecutando plan completo: ${selectedPlan.nombre}`);
 
     for (const seccion of selectedPlan.data.secciones) {
       for (const [idx, caso] of seccion.casos.entries()) {
-        const key = executionKey(seccion, caso, idx)
-        const endpoint = caso.configEndpoint ?? seccion.configEndpoint
-        const payload = caso.configTemplate ?? seccion.configTemplate ?? {}
+        const key = executionKey(seccion, caso, idx);
+        const endpoint = caso.configEndpoint ?? seccion.configEndpoint;
+        const payload = caso.configTemplate ?? seccion.configTemplate ?? {};
 
         if (!endpoint) {
-          appendLog(`No hay endpoint configurado para ${caso.id}`, 'fail')
-          setLiveStatuses((previous) => ({ ...previous, [key]: 'fail' }))
-          continue
+          appendLog(`No hay endpoint configurado para ${caso.id}`, 'fail');
+          setLiveStatuses((previous) => ({ ...previous, [key]: 'fail' }));
+          continue;
         }
 
         try {
@@ -154,36 +162,38 @@ export default function App() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),
-          })
-          const backendInfo = await response.json()
-          if (!response.ok) throw new Error(backendInfo.error || `El servidor respondió ${response.status}`)
-          runCase(seccion, caso, idx, payload, backendInfo)
+          });
+          const backendInfo = await response.json();
+          if (!response.ok) throw new Error(backendInfo.error || `El servidor respondió ${response.status}`);
+          runCase(seccion, caso, idx, payload, backendInfo);
         } catch (error) {
-          appendLog(`No se pudo iniciar ${caso.id}: ${error.message}`, 'fail')
-          setLiveStatuses((previous) => ({ ...previous, [key]: 'fail' }))
+          appendLog(`No se pudo iniciar ${caso.id}: ${error.message}`, 'fail');
+          setLiveStatuses((previous) => ({ ...previous, [key]: 'fail' }));
         }
       }
     }
   }
 
-  const secciones = selectedPlan?.data?.secciones || []
-  const totalCasos = selectedPlan ? contarCasos(selectedPlan) : 0
-  const totalPass = Object.values(liveStatuses).filter((status) => status === 'pass').length
-  const totalFail = Object.values(liveStatuses).filter((status) => status === 'fail').length
-  const totalRunning = Object.values(liveStatuses).filter((status) => status === 'running').length
+  const secciones = selectedPlan?.data?.secciones || [];
+  const totalCasos = selectedPlan ? contarCasos(selectedPlan) : 0;
+  const totalPass = Object.values(liveStatuses).filter((status) => status === 'pass').length;
+  const totalFail = Object.values(liveStatuses).filter((status) => status === 'fail').length;
+  const totalRunning = Object.values(liveStatuses).filter((status) => status === 'running').length;
 
   return (
-    <div className="app-shell">
+    <div className={`app-shell ${sidebarVisible ? '' : 'collapsed'}`}>
       <Sidebar
         projects={projects}
         selectedPlanId={selectedPlan?.id}
         onSelectPlan={(plan) => {
-          eventSourcesRef.current.forEach((source) => source.close())
-          eventSourcesRef.current.clear()
-          setSelectedPlan(plan)
-          setLiveStatuses({})
-          setActiveExecutions([])
+          eventSourcesRef.current.forEach((source) => source.close());
+          eventSourcesRef.current.clear();
+          setSelectedPlan(plan);
+          setLiveStatuses({});
+          setActiveExecutions([]);
         }}
+        onToggle={() => setSidebarVisible((v) => !v)}
+        collapsed={!sidebarVisible}
       />
 
       <main className="main">
@@ -207,12 +217,22 @@ export default function App() {
               </button>
             </div>
             {secciones.map((seccion) => (
-              <TestSection key={seccion.nombre} seccion={seccion} liveStatuses={liveStatuses} onRunCase={runCase} />
+              <TestSection
+                key={seccion.nombre}
+                seccion={seccion}
+                liveStatuses={liveStatuses}
+                onRunCase={runCase}
+                showLogs={visibleLogSection === seccion.nombre}
+                logLines={logLines}
+              />
             ))}
-            <div ref={logRef}><LogPanel lines={logLines} /></div>
           </>
         )}
       </main>
+
+      {!sidebarVisible && (
+        <button className="sidebar-open-btn" onClick={() => setSidebarVisible(true)} aria-label="Mostrar sidebar">☰</button>
+      )}
     </div>
-  )
+  );
 }

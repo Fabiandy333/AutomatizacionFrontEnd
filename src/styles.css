@@ -46,7 +46,7 @@ button {
 
 .app-shell {
   display: grid;
-  grid-template-columns: 260px 1fr;
+  grid-template-columns: 260px 1fr 340px;
   min-height: 100vh;
 }
 
@@ -58,6 +58,48 @@ button {
   display: flex;
   flex-direction: column;
   gap: 20px;
+}
+
+.app-shell.collapsed {
+  grid-template-columns: 0 1fr 340px;
+}
+
+.sidebar {
+  min-width: 0;
+  transition: padding 0.18s ease, opacity 0.18s ease;
+}
+
+.sidebar.collapsed {
+  padding-left: 8px;
+  padding-right: 8px;
+  opacity: 0.001;
+  pointer-events: none;
+}
+
+.sidebar-hide-btn {
+  margin-left: auto;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.sidebar-open-btn {
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  z-index: 220;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-strong);
+  color: var(--text-primary);
+  padding: 8px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.log-column {
+  padding: 24px 18px 60px 18px;
 }
 
 .sidebar-brand {
@@ -243,6 +285,21 @@ button {
   overflow: hidden;
 }
 
+/* When a section shows logs, split content and log column on wide screens */
+.section.with-log .section-body {
+  display: grid;
+  grid-template-columns: 1fr 340px;
+  gap: 12px;
+  align-items: start;
+}
+.section.with-log .section-log { padding: 8px 0; }
+
+@media (max-width: 980px) {
+  .section.with-log .section-body {
+    grid-template-columns: 1fr;
+  }
+}
+
 .section-header {
   display: flex;
   align-items: center;
@@ -338,7 +395,7 @@ button {
   font-family: var(--font-mono);
   font-size: 12px;
   line-height: 1.8;
-  height: 200px;
+  height: 550px;
   overflow-y: auto;
   color: var(--text-secondary);
   position: sticky;
@@ -454,17 +511,16 @@ button {
 /* Responsive adjustments */
 @media (max-width: 980px) {
   .app-shell {
-    grid-template-columns: 1fr;
+    grid-template-columns: 200px 1fr 320px;
   }
 
   .sidebar {
     border-right: none;
-    border-bottom: 1px solid var(--border);
-    padding: 18px 16px;
+    padding: 14px 12px;
   }
 
   .main {
-    padding: 18px 16px 40px;
+    padding: 14px 12px 40px;
   }
 
   .toolbar {
@@ -513,9 +569,10 @@ button {
   }
 
   .log-panel {
-    position: static;
-    height: auto;
-    min-height: 160px;
+    position: sticky;
+    top: 16px;
+    height: calc(100vh - 32px);
+    overflow-y: auto;
   }
 }
 
