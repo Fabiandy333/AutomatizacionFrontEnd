@@ -33,12 +33,13 @@ function SubproyectoBlock({ subproyecto, selectedPlanId, onSelectPlan }) {
   )
 }
 
-export default function Sidebar({ projects, selectedPlanId, onSelectPlan }) {
+export default function Sidebar({ projects, selectedPlanId, onSelectPlan, onToggle, collapsed }) {
   return (
-    <aside className="sidebar">
+    <aside className={`sidebar ${collapsed ? 'collapsed' : ''}`}>
       <div className="sidebar-brand">
         <span className="dot" />
         <span>QA Automation</span>
+        <button className="sidebar-hide-btn" onClick={onToggle} aria-label="Ocultar sidebar">✕</button>
       </div>
 
       <div className="project-group">

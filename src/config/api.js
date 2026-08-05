@@ -27,8 +27,13 @@ export const API_ENDPOINTS = {
   PASAPORTES_ESTADO: (executionId) => `${API_BASE_URL}/api/pasaportes/${executionId}/estado`,
   PASAPORTES_OTP: (executionId) => `${API_BASE_URL}/api/pasaportes/${executionId}/otp`,
 
+  // SMS
+  SMS_BASE: `${API_BASE_URL}/api/sms`,
+  SMS_LOGIN: `${API_BASE_URL}/api/sms/login`,
+  SMS_SISTEMA_ORIGEN: `${API_BASE_URL}/api/sms/sistema-origen`,
+  SMS_LOGS: (executionId) => `${API_BASE_URL}/api/sms/${executionId}/logs`,
+  SMS_ESTADO: (executionId) => `${API_BASE_URL}/api/sms/${executionId}/estado`
 
-  
 }
 
 export default API_BASE_URL;
