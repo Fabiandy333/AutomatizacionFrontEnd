@@ -13,6 +13,7 @@
 .env
 .env.local
 .env.*.local
+!.env.example
 
 # Archivos de depuración y registros
 npm-debug.log*
