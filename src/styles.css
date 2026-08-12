@@ -608,3 +608,244 @@ button {
     width: 100%;
   }
 }
+
+/* ============================================================
+   CONFIGURATION FORM
+   ============================================================ */
+
+.config-modal-panel {
+  width: min(760px, 100%);
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+}
+
+.config-form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  margin-top: 6px;
+}
+
+.config-section {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 16px;
+}
+
+.config-section h4 {
+  margin: 0 0 5px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.config-section-description {
+  margin: 0 0 14px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.config-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.config-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.config-field label {
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.config-field .required {
+  color: var(--danger);
+  margin-left: 3px;
+}
+
+.config-field input,
+.config-field select {
+  width: 100%;
+  min-height: 36px;
+  padding: 8px 10px;
+
+  background: #0e1015;
+  color: var(--text-primary);
+
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+
+  font-family: var(--font-ui);
+  font-size: 12.5px;
+}
+
+.config-field input:focus,
+.config-field select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(91, 140, 255, 0.12);
+}
+
+.config-field small {
+  color: var(--text-muted);
+  font-size: 10.5px;
+}
+
+
+/* ============================================================
+   RADIO
+   ============================================================ */
+
+.radio-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.radio-option {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center;
+  gap: 7px;
+
+  padding: 8px 10px;
+
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+
+  cursor: pointer;
+}
+
+.radio-option:hover {
+  background: var(--bg-card-hover);
+  border-color: var(--border-strong);
+}
+
+.radio-option input {
+  width: auto;
+  min-height: auto;
+}
+
+
+/* ============================================================
+   BATCH / MULTIPLE RECORDS
+   ============================================================ */
+
+.config-record-selector {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+
+  padding: 12px;
+
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.config-record-selector label {
+  color: var(--text-muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.config-record-selector select {
+  width: 100%;
+  min-height: 36px;
+
+  background: #0e1015;
+  color: var(--text-primary);
+
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+
+  padding: 8px 10px;
+
+  font-size: 12.5px;
+}
+
+
+/* ============================================================
+   ADVANCED CONFIGURATION
+   ============================================================ */
+
+.advanced-config {
+  margin-top: 4px;
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+}
+
+.advanced-toggle {
+  width: 100%;
+
+  display: flex;
+  align-items: center;
+  gap: 8px;
+
+  background: transparent;
+  border: none;
+
+  color: var(--text-secondary);
+
+  padding: 8px 0;
+
+  font-size: 12px;
+  text-align: left;
+}
+
+.advanced-toggle:hover {
+  color: var(--text-primary);
+}
+
+.advanced-content {
+  margin-top: 8px;
+}
+
+.advanced-content p {
+  margin: 0 0 8px;
+
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+
+/* ============================================================
+   MODAL RESPONSIVE
+   ============================================================ */
+
+@media (max-width: 700px) {
+
+  .config-modal-panel {
+    max-height: calc(100vh - 24px);
+    padding: 16px;
+  }
+
+  .config-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .config-section {
+    padding: 13px;
+  }
+
+  .radio-group {
+    flex-direction: column;
+  }
+
+  .radio-option {
+    width: 100%;
+  }
+
+}
+
+

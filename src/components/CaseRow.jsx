@@ -31,12 +31,22 @@ function normalizeStatus(status) {
   return status.toString().trim().toLowerCase()
 }
 
-export default function CaseRow({ caso, liveStatus, configTemplate, configEndpoint, onRun }) {
+export default function CaseRow({ caso, liveStatus, configTemplate, configSchema,configEndpoint, onRun }) {
   const [open, setOpen] = useState(false)
   const [configOpen, setConfigOpen] = useState(false)
   // "config" guarda la ultima version confirmada por el usuario en esta sesion,
   // para que el boton de play (sin pasar por el modal) reutilice lo ya revisado.
-  const [config, setConfig] = useState(caso.configTemplate ?? configTemplate ?? {})
+  const resolvedConfig =
+  caso.configTemplate ??
+  configTemplate ??
+  []
+
+const [config, setConfig] = useState(resolvedConfig)
+const schema =
+  caso.configSchema ??
+  configTemplate?.schema ??
+  configSchema ??
+  null
   const [ejecucionesActivas, setEjecucionesActivas] = useState([]) // [{ executionId, email, estado }]
   const [otpActivo, setOtpActivo] = useState(null) // { executionId, email } | null
   const [isExecuting, setIsExecuting] = useState(false) // Para desabilitar el boton mientras se ejecuta
@@ -46,20 +56,45 @@ export default function CaseRow({ caso, liveStatus, configTemplate, configEndpoi
   const isRunning = liveStatus === 'running'
 
   function handleConfirmConfig(resultado) {
-    const configPayload = resultado.payload ?? resultado;
-    const backendInfo = resultado.backend;
-    setConfig(configPayload);
-    setConfigOpen(false);
-    onRun(caso, configPayload, backendInfo);
+  const configPayload =
+    resultado.payload ?? resultado
 
-    // Arma la lista de ejecuciones a monitorear (soporta 1 usuario o el lote completo)
-     if (backendInfo) {
-       const nuevas = backendInfo.ejecuciones
-         ? backendInfo.ejecuciones.map((e) => ({ executionId: e.executionId, email: e.email, estado: 'pendiente' }))
-         : [{ executionId: backendInfo.executionId, email: backendInfo.email, estado: 'pendiente' }]
-       setEjecucionesActivas(nuevas)
-     }
+  const backendInfo =
+    resultado.backend
+
+  setConfig(configPayload)
+  setConfigOpen(false)
+
+  onRun(
+    caso,
+    configPayload,
+    backendInfo
+  )
+
+  if (backendInfo) {
+    const nuevas =
+      backendInfo.ejecuciones
+        ? backendInfo.ejecuciones.map(
+            (e) => ({
+              executionId:
+                e.executionId,
+              email: e.email,
+              estado: 'pendiente',
+            })
+          )
+        : [
+            {
+              executionId:
+                backendInfo.executionId,
+              email:
+                backendInfo.email,
+              estado: 'pendiente',
+            },
+          ]
+
+    setEjecucionesActivas(nuevas)
   }
+}
 
   // Ejecuta directamente con la configuracion guardada, enviando al backend primero
   async function handleDirectRun() {
@@ -230,31 +265,47 @@ export default function CaseRow({ caso, liveStatus, configTemplate, configEndpoi
         </div>
       )}
       {ejecucionesActivas.length > 0 && (
-  <div style={{ padding: '0 16px 12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-    <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text-secondary)' }}>
-      <input
-        type="checkbox"
-        checked={verPantalla}
-        onChange={(e) => setVerPantalla(e.target.checked)}
-      />
-      Ver pantalla en vivo
-    </label>
+        <div
+          style={{
+            padding: "0 16px 12px",
+            display: "flex",
+            flexDirection: "column",
+            gap: 8,
+          }}
+        >
+          <label
+            style={{
+              fontSize: 12,
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              color: "var(--text-secondary)",
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={verPantalla}
+              onChange={(e) => setVerPantalla(e.target.checked)}
+            />
+            Ver pantalla en vivo
+          </label>
 
-    {verPantalla && (
-      <LiveScreenViewer executionId={ejecucionesActivas[0].executionId} />
-    )}
-  </div>
-)}
+          {verPantalla && (
+            <LiveScreenViewer executionId={ejecucionesActivas[0].executionId} />
+          )}
+        </div>
+      )}
 
       <ConfigModal
-        isOpen={configOpen}
-        title={`Configuracion de ejecucion - ${caso.id}`}
-        description={`...`}
-        initialData={config}
-        endpoint={caso.configEndpoint ?? configEndpoint}
-        onClose={() => setConfigOpen(false)}
-        onConfirm={handleConfirmConfig}
-      />
+  isOpen={configOpen}
+  title={`${caso.id} — ${caso.criterio}`}
+  description="Complete los datos necesarios para ejecutar este caso de prueba."
+  initialData={config}
+  schema={caso.configSchema ?? null}
+  endpoint={caso.configEndpoint ?? configEndpoint}
+  onClose={() => setConfigOpen(false)}
+  onConfirm={handleConfirmConfig}
+/>
       <OtpModal
         isOpen={!!otpActivo}
         email={otpActivo?.email}
@@ -264,5 +315,5 @@ export default function CaseRow({ caso, liveStatus, configTemplate, configEndpoi
         onSubmitted={() => setOtpActivo(null)}
       />
     </div>
-  )
+  );
 }

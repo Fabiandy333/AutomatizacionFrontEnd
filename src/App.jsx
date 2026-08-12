@@ -149,7 +149,10 @@ export default function App() {
       for (const [idx, caso] of seccion.casos.entries()) {
         const key = executionKey(seccion, caso, idx);
         const endpoint = caso.configEndpoint ?? seccion.configEndpoint;
-        const payload = caso.configTemplate ?? seccion.configTemplate ?? {};
+        const payload =
+  caso.configTemplate ??
+  seccion.configTemplate ??
+  [];
 
         if (!endpoint) {
           appendLog(`No hay endpoint configurado para ${caso.id}`, 'fail');
