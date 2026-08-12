@@ -71,30 +71,18 @@ function executionKey(seccion, caso, idx) {
 export default function App() {
   const [selectedPlan, setSelectedPlan] = useState(findFirstPlan);
   const [liveStatuses, setLiveStatuses] = useState({});
-
-  const [logLines, setLogLines] = useState([]);
-
+  const [logsByExecution, setLogsByExecution] = useState({});
   const [activeExecutions, setActiveExecutions] = useState([]);
   const [sidebarVisible, setSidebarVisible] = useState(true);
-  const [visibleLogSection, setVisibleLogSection] = useState(null);
-
   // Ejecuciones terminadas que aparecen en el resumen
   const [executionHistory, setExecutionHistory] = useState([]);
-
   // Ejecución actualmente seleccionada para mostrar el resumen
   const [selectedExecutionSummary, setSelectedExecutionSummary] = useState(null);
-
   // Para repetir una prueba
   const [lastExecutionRequest, setLastExecutionRequest] = useState(null);
-
-  const logRef = useRef(null);
   const eventSourcesRef = useRef(new Map());
 
-  useEffect(() => {
-    if (logRef.current) {
-      logRef.current.scrollTop = logRef.current.scrollHeight;
-    }
-  }, [logLines]);
+
 
   /*
    * Polling del estado de las ejecuciones
@@ -159,9 +147,6 @@ export default function App() {
 
       setActiveExecutions(remaining);
 
-      if (remaining.length === 0) {
-        setVisibleLogSection(null);
-      }
     }, 3000);
 
     return () => clearInterval(interval);
@@ -174,16 +159,19 @@ export default function App() {
     };
   }, []);
 
-  function appendLog(text, type = 'info') {
-    setLogLines((previous) => [
-      ...previous,
+  function appendLog(executionKey, text, type = 'info') {
+  setLogsByExecution((previous) => ({
+    ...previous,
+    [executionKey]: [
+      ...(previous[executionKey] || []),
       {
         time: nowTime(),
         text,
-        type,
-      },
-    ]);
-  }
+        type
+      }
+    ]
+  }));
+}
 
   /*
    * Cuando termina una ejecución se construye el resumen.
@@ -239,47 +227,39 @@ export default function App() {
     );
   }
 
-  function connectToLogs(
-    executionId,
-    statusKey,
-    caseId
-  ) {
-    eventSourcesRef.current.get(statusKey)?.close();
+  function connectToLogs(executionId, statusKey, caseId) {
+  eventSourcesRef.current.get(statusKey)?.close();
 
-    const tokenQuery = API_TOKEN
-      ? `?token=${encodeURIComponent(API_TOKEN)}`
-      : '';
+  const tokenQuery = API_TOKEN
+    ? `?token=${encodeURIComponent(API_TOKEN)}`
+    : '';
 
-    const eventSource = new EventSource(
-      `${API_ENDPOINTS.PASAPORTES_LOGS(
-        executionId
-      )}${tokenQuery}`
-    );
+  const eventSource = new EventSource(
+    `${API_ENDPOINTS.PASAPORTES_LOGS(executionId)}${tokenQuery}`
+  );
 
-    eventSourcesRef.current.set(
-      statusKey,
-      eventSource
-    );
+  eventSourcesRef.current.set(statusKey, eventSource);
 
-    eventSource.onmessage = (event) => {
-      try {
-        const logEntry = JSON.parse(event.data);
+  eventSource.onmessage = (event) => {
+    try {
+      const logEntry = JSON.parse(event.data);
 
-        appendLog(
-          logEntry.text || event.data,
-          logEntry.type || 'info'
-        );
-      } catch {
-        appendLog(event.data, 'info');
-      }
-    };
-
-    eventSource.onerror = () => {
-      console.warn(
-        `Conexión de logs interrumpida para ${caseId}; reintentando.`
+      appendLog(
+        statusKey,
+        logEntry.text || event.data,
+        logEntry.type || 'info'
       );
-    };
-  }
+    } catch {
+      appendLog(statusKey, event.data, 'info');
+    }
+  };
+
+  eventSource.onerror = () => {
+    console.warn(
+      `Conexión de logs interrumpida para ${caseId}; reintentando.`
+    );
+  };
+}
 
   /*
    * Registra una ejecución creada por el backend.
@@ -304,7 +284,7 @@ export default function App() {
       [key]: 'running',
     }));
 
-    appendLog(
+    appendLog(key,
       `Iniciando ${caso.id} - ${caso.criterio}`
     );
 
@@ -313,7 +293,7 @@ export default function App() {
         ? configPayload.length
         : 1;
 
-      appendLog(
+      appendLog(key,
         `Payload recibido: ${records} registro(s)`
       );
     }
@@ -381,7 +361,7 @@ export default function App() {
     }
 
     if (!executionId) {
-      appendLog(
+      appendLog(key,
         `El backend no devolvió un identificador de ejecución para ${caso.id}`,
         'fail'
       );
@@ -405,10 +385,6 @@ export default function App() {
       ),
       executionEntry,
     ]);
-
-    setVisibleLogSection(
-      seccion.nombre
-    );
 
     connectToLogs(
       executionId,
@@ -451,7 +427,7 @@ export default function App() {
 
     setSelectedExecutionSummary(null);
 
-    appendLog(
+    console.log(
       `Ejecutando plan completo: ${selectedPlan.nombre}`
     );
 
@@ -473,7 +449,7 @@ export default function App() {
           [];
 
         if (!endpoint) {
-          appendLog(
+          appendLog(key,
             `No hay endpoint configurado para ${caso.id}`,
             'fail'
           );
@@ -520,6 +496,7 @@ export default function App() {
           );
         } catch (error) {
           appendLog(
+            key,
             `No se pudo iniciar ${caso.id}: ${error.message}`,
             'fail'
           );
@@ -943,16 +920,13 @@ export default function App() {
 
             {secciones.map((seccion) => (
               <TestSection
-                key={seccion.nombre}
-                seccion={seccion}
-                liveStatuses={liveStatuses}
-                onRunCase={runCase}
-                showLogs={
-                  visibleLogSection ===
-                  seccion.nombre
-                }
-                logLines={logLines}
-              />
+  key={seccion.nombre}
+  seccion={seccion}
+  liveStatuses={liveStatuses}
+  onRunCase={runCase}
+  logsByExecution={logsByExecution}
+/>
+
             ))}
           </>
         )}
