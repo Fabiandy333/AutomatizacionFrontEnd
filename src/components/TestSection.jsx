@@ -1,20 +1,24 @@
 import CaseRow from "./CaseRow";
 import LogPanel from "./LogPanel";
 
+function executionKey(seccion, caso, idx) {
+  return `${seccion.nombre}-${caso.id}-${idx}`;
+}
+
 export default function TestSection({
   seccion,
   liveStatuses,
   onRunCase,
-  showLogs = false,
-  logLines = [],
+  logsByExecution = {},
 }) {
   const firstId = seccion.casos[0]?.id;
   const lastId = seccion.casos[seccion.casos.length - 1]?.id;
 
   return (
-    <section className={`section ${showLogs ? "with-log" : ""}`}>
+    <section className="section">
       <div className="section-header">
         <h2>{seccion.nombre}</h2>
+
         <span className="case-ids">
           {firstId}
           {lastId && lastId !== firstId ? ` - ${lastId}` : ""} (
@@ -22,34 +26,52 @@ export default function TestSection({
         </span>
       </div>
 
-      <div className="section-body">
-        <div className="cases-list">
-          {seccion.casos.map((caso, idx) => (
-            <CaseRow
-  key={`${caso.id}-${idx}`}
-  caso={caso}
-  liveStatus={liveStatuses[`${seccion.nombre}-${caso.id}-${idx}`]}
-  configTemplate={seccion.configTemplate}
-  configSchema={seccion.configSchema}
-  configEndpoint={seccion.configEndpoint}
-  onRun={(casoRef, configPayload, backendInfo) =>
-    onRunCase(
-      seccion,
-      casoRef,
-      idx,
-      configPayload,
-      backendInfo
-    )
-  }
-/>
-          ))}
-        </div>
+      <div className="cases-list">
+        {seccion.casos.map((caso, idx) => {
+          const key = executionKey(seccion, caso, idx);
 
-        {showLogs && (
-          <div className="section-log">
-            <LogPanel lines={logLines} />
-          </div>
-        )}
+          const caseLogs = logsByExecution[key] || [];
+
+          return (
+            <div key={key} className="case-execution-container">
+              <CaseRow
+                caso={caso}
+                liveStatus={liveStatuses[key]}
+                configTemplate={
+                  caso.configTemplate ??
+                  seccion.configTemplate
+                }
+                configSchema={
+                  caso.configSchema ??
+                  seccion.configSchema
+                }
+                configEndpoint={
+                  caso.configEndpoint ??
+                  seccion.configEndpoint
+                }
+                onRun={(
+                  casoRef,
+                  configPayload,
+                  backendInfo
+                ) =>
+                  onRunCase(
+                    seccion,
+                    casoRef,
+                    idx,
+                    configPayload,
+                    backendInfo
+                  )
+                }
+              />
+
+              {caseLogs.length > 0 && (
+                <div className="case-log">
+                  <LogPanel lines={caseLogs} />
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
     </section>
   );
