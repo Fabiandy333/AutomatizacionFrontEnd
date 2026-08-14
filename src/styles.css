@@ -88,12 +88,12 @@ textarea:focus-visible {
 
 .app-shell {
   display: grid;
-  grid-template-columns: 260px minmax(0, 1fr) 340px;
+  grid-template-columns: 260px minmax(0, 1fr);
   min-height: 100vh;
 }
 
 .app-shell.collapsed {
-  grid-template-columns: 0 minmax(0, 1fr) 340px;
+  grid-template-columns: 0 minmax(0, 1fr);
 }
 
 /* ---------- SIDEBAR ---------- */
@@ -270,8 +270,23 @@ textarea:focus-visible {
 .main {
   min-width: 0;
   width: 100%;
-  max-width: 1120px;
-  padding: 28px 34px 70px;
+  max-width: none;
+  padding: 28px 40px 70px;
+}
+
+/* Aprovechar mejor pantallas grandes */
+@media (min-width: 1600px) {
+  .main {
+    padding-left: 48px;
+    padding-right: 48px;
+  }
+}
+
+@media (min-width: 2000px) {
+  .main {
+    padding-left: 60px;
+    padding-right: 60px;
+  }
 }
 
 .main-header {
@@ -429,6 +444,7 @@ textarea:focus-visible {
 /* ---------- SECTIONS ---------- */
 
 .section {
+  width: 100%;
   margin-bottom: 22px;
   overflow: hidden;
   border: 1px solid var(--border);
@@ -491,10 +507,10 @@ textarea:focus-visible {
 
 .case-row-main {
   display: grid;
-  grid-template-columns: 82px minmax(0,1fr) 105px 90px 34px;
+  grid-template-columns: 100px minmax(0, 1fr) 130px 90px auto;
   align-items: center;
-  gap: 12px;
-  padding: 11px 18px;
+  gap: 16px;
+  padding: 13px 20px;
 }
 
 .case-id {
@@ -506,7 +522,7 @@ textarea:focus-visible {
 .case-title {
   min-width: 0;
   overflow: hidden;
-  font-size: 12.5px;
+  font-size: 13px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -1409,5 +1425,27 @@ textarea:focus-visible {
 
   .execution-actions .btn {
     flex: 1 1 100%;
+  }
+}
+
+.case-execution-container.log-selected {
+  border-radius: 12px;
+  transition: all 0.3s ease;
+}
+
+.case-log.log-highlight {
+  border: 2px solid var(--accent);
+  border-radius: 10px;
+  box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.12);
+  animation: logHighlight 1.5s ease;
+}
+
+@keyframes logHighlight {
+  0% {
+    box-shadow: 0 0 0 8px rgba(59, 130, 246, 0.3);
+  }
+
+  100% {
+    box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.12);
   }
 }

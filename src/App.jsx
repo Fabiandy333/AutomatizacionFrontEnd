@@ -1,10 +1,10 @@
-import { useEffect, useRef, useState } from 'react';
-import Sidebar from './components/Sidebar';
-import MetaBar from './components/MetaBar';
-import TestSection from './components/TestSection';
-import LogPanel from './components/LogPanel';
-import { projects, contarCasos } from './data/projects';
-import { apiFetch, API_ENDPOINTS, API_TOKEN } from './config/api';
+import { useEffect, useRef, useState } from "react";
+import Sidebar from "./components/Sidebar";
+import MetaBar from "./components/MetaBar";
+import TestSection from "./components/TestSection";
+import LogPanel from "./components/LogPanel";
+import { projects, contarCasos } from "./data/projects";
+import { apiFetch, API_ENDPOINTS, API_TOKEN } from "./config/api";
 
 function findFirstPlan() {
   for (const project of projects) {
@@ -19,26 +19,26 @@ function findFirstPlan() {
 }
 
 function nowTime() {
-  return new Date().toLocaleTimeString('es-CO', {
+  return new Date().toLocaleTimeString("es-CO", {
     hour12: false,
   });
 }
 
 function formatDateTime(date) {
-  if (!date) return '-';
+  if (!date) return "-";
 
-  return new Date(date).toLocaleString('es-CO', {
-    dateStyle: 'short',
-    timeStyle: 'medium',
+  return new Date(date).toLocaleString("es-CO", {
+    dateStyle: "short",
+    timeStyle: "medium",
   });
 }
 
 function formatDuration(start, end = Date.now()) {
-  if (!start) return '-';
+  if (!start) return "-";
 
   const seconds = Math.max(
     0,
-    Math.floor((new Date(end).getTime() - new Date(start).getTime()) / 1000)
+    Math.floor((new Date(end).getTime() - new Date(start).getTime()) / 1000),
   );
 
   const hours = Math.floor(seconds / 3600);
@@ -57,11 +57,11 @@ function formatDuration(start, end = Date.now()) {
 }
 
 function isFinished(status) {
-  return ['exitoso', 'fallido', 'requiere_revision'].includes(status);
+  return ["exitoso", "fallido", "requiere_revision"].includes(status);
 }
 
 function toLiveStatus(status) {
-  return status === 'exitoso' ? 'pass' : 'fail';
+  return status === "exitoso" ? "pass" : "fail";
 }
 
 function executionKey(seccion, caso, idx) {
@@ -77,12 +77,14 @@ export default function App() {
   // Ejecuciones terminadas que aparecen en el resumen
   const [executionHistory, setExecutionHistory] = useState([]);
   // Ejecución actualmente seleccionada para mostrar el resumen
-  const [selectedExecutionSummary, setSelectedExecutionSummary] = useState(null);
+  const [selectedExecutionSummary, setSelectedExecutionSummary] =
+    useState(null);
   // Para repetir una prueba
   const [lastExecutionRequest, setLastExecutionRequest] = useState(null);
   const eventSourcesRef = useRef(new Map());
 
-
+  const [visibleLogExecution, setVisibleLogExecution] =
+  useState(null);
 
   /*
    * Polling del estado de las ejecuciones
@@ -99,17 +101,12 @@ export default function App() {
 
           try {
             const response = await apiFetch(
-              API_ENDPOINTS.PASAPORTES_ESTADO(entry.executionId)
+              API_ENDPOINTS.PASAPORTES_ESTADO(entry.executionId),
             );
 
             const data = await response.json();
 
-            const status = (
-              data.estado ||
-              data.status ||
-              data.state ||
-              ''
-            )
+            const status = (data.estado || data.status || data.state || "")
               .toString()
               .trim()
               .toLowerCase();
@@ -122,7 +119,7 @@ export default function App() {
           } catch {
             return entry;
           }
-        })
+        }),
       );
 
       updated.forEach((entry) => {
@@ -141,12 +138,9 @@ export default function App() {
         finishExecution(entry, finalStatus);
       });
 
-      const remaining = updated.filter(
-        (entry) => !isFinished(entry.status)
-      );
+      const remaining = updated.filter((entry) => !isFinished(entry.status));
 
       setActiveExecutions(remaining);
-
     }, 3000);
 
     return () => clearInterval(interval);
@@ -159,19 +153,19 @@ export default function App() {
     };
   }, []);
 
-  function appendLog(executionKey, text, type = 'info') {
-  setLogsByExecution((previous) => ({
-    ...previous,
-    [executionKey]: [
-      ...(previous[executionKey] || []),
-      {
-        time: nowTime(),
-        text,
-        type
-      }
-    ]
-  }));
-}
+  function appendLog(executionKey, text, type = "info") {
+    setLogsByExecution((previous) => ({
+      ...previous,
+      [executionKey]: [
+        ...(previous[executionKey] || []),
+        {
+          time: nowTime(),
+          text,
+          type,
+        },
+      ],
+    }));
+  }
 
   /*
    * Cuando termina una ejecución se construye el resumen.
@@ -185,10 +179,7 @@ export default function App() {
       finishedAt,
       finalStatus,
 
-      duration: formatDuration(
-        entry.startedAt,
-        finishedAt
-      ),
+      duration: formatDuration(entry.startedAt, finishedAt),
 
       stepsExecuted:
         entry.backendData?.pasosEjecutados ??
@@ -199,108 +190,89 @@ export default function App() {
       failures:
         entry.backendData?.fallos ??
         entry.backendData?.failures ??
-        (finalStatus === 'fail' ? 1 : 0),
+        (finalStatus === "fail" ? 1 : 0),
 
       environment:
         entry.backendData?.ambiente ??
         entry.backendData?.environment ??
         import.meta.env.MODE ??
-        'QA',
+        "QA",
     };
 
     setExecutionHistory((previous) => [
       summary,
-      ...previous.filter(
-        (item) => item.key !== entry.key
-      ),
+      ...previous.filter((item) => item.key !== entry.key),
     ]);
 
     setSelectedExecutionSummary(summary);
 
     appendLog(
-      `${entry.caseId} finalizó: ${
-        finalStatus === 'pass'
-          ? 'EXITOSO'
-          : 'FALLIDO'
-      }`,
-      finalStatus === 'pass' ? 'ok' : 'fail'
-    );
+  entry.key,
+  `${entry.caseId} finalizó: ${
+    finalStatus === 'pass'
+      ? 'EXITOSO'
+      : 'FALLIDO'
+  }`,
+  finalStatus === 'pass' ? 'ok' : 'fail'
+);
   }
 
   function connectToLogs(executionId, statusKey, caseId) {
-  eventSourcesRef.current.get(statusKey)?.close();
+    eventSourcesRef.current.get(statusKey)?.close();
 
-  const tokenQuery = API_TOKEN
-    ? `?token=${encodeURIComponent(API_TOKEN)}`
-    : '';
+    const tokenQuery = API_TOKEN
+      ? `?token=${encodeURIComponent(API_TOKEN)}`
+      : "";
 
-  const eventSource = new EventSource(
-    `${API_ENDPOINTS.PASAPORTES_LOGS(executionId)}${tokenQuery}`
-  );
-
-  eventSourcesRef.current.set(statusKey, eventSource);
-
-  eventSource.onmessage = (event) => {
-    try {
-      const logEntry = JSON.parse(event.data);
-
-      appendLog(
-        statusKey,
-        logEntry.text || event.data,
-        logEntry.type || 'info'
-      );
-    } catch {
-      appendLog(statusKey, event.data, 'info');
-    }
-  };
-
-  eventSource.onerror = () => {
-    console.warn(
-      `Conexión de logs interrumpida para ${caseId}; reintentando.`
+    const eventSource = new EventSource(
+      `${API_ENDPOINTS.PASAPORTES_LOGS(executionId)}${tokenQuery}`,
     );
-  };
-}
+
+    eventSourcesRef.current.set(statusKey, eventSource);
+
+    eventSource.onmessage = (event) => {
+      try {
+        const logEntry = JSON.parse(event.data);
+
+        appendLog(
+          statusKey,
+          logEntry.text || event.data,
+          logEntry.type || "info",
+        );
+      } catch {
+        appendLog(statusKey, event.data, "info");
+      }
+    };
+
+    eventSource.onerror = () => {
+      console.warn(
+        `Conexión de logs interrumpida para ${caseId}; reintentando.`,
+      );
+    };
+  }
 
   /*
    * Registra una ejecución creada por el backend.
    */
-  function runCase(
-    seccion,
-    caso,
-    idx,
-    configPayload,
-    backendInfo
-  ) {
-    const key = executionKey(
-      seccion,
-      caso,
-      idx
-    );
+  function runCase(seccion, caso, idx, configPayload, backendInfo) {
+    const key = executionKey(seccion, caso, idx);
 
     const startedAt = new Date();
 
     setLiveStatuses((previous) => ({
       ...previous,
-      [key]: 'running',
+      [key]: "running",
     }));
 
-    appendLog(key,
-      `Iniciando ${caso.id} - ${caso.criterio}`
-    );
+    appendLog(key, `Iniciando ${caso.id} - ${caso.criterio}`);
 
     if (configPayload) {
-      const records = Array.isArray(configPayload)
-        ? configPayload.length
-        : 1;
+      const records = Array.isArray(configPayload) ? configPayload.length : 1;
 
-      appendLog(key,
-        `Payload recibido: ${records} registro(s)`
-      );
+      appendLog(key, `Payload recibido: ${records} registro(s)`);
     }
 
-    const execution =
-      backendInfo?.ejecuciones?.[0] ??
-      backendInfo;
+    const execution = backendInfo?.ejecuciones?.[0] ?? backendInfo;
 
     const executionId =
       execution?.executionId ||
@@ -312,7 +284,7 @@ export default function App() {
       execution?.estado ||
       execution?.status ||
       execution?.state ||
-      'running'
+      "running"
     )
       .toString()
       .trim()
@@ -333,7 +305,7 @@ export default function App() {
         execution?.ambiente ||
         execution?.environment ||
         import.meta.env.MODE ||
-        'QA',
+        "QA",
     };
 
     // Guardamos la última ejecución para poder repetirla
@@ -352,45 +324,34 @@ export default function App() {
         [key]: finalStatus,
       }));
 
-      finishExecution(
-        executionEntry,
-        finalStatus
-      );
+      finishExecution(executionEntry, finalStatus);
 
       return;
     }
 
     if (!executionId) {
-      appendLog(key,
+      appendLog(
+        key,
         `El backend no devolvió un identificador de ejecución para ${caso.id}`,
-        'fail'
+        "fail",
       );
 
       setLiveStatuses((previous) => ({
         ...previous,
-        [key]: 'fail',
+        [key]: "fail",
       }));
 
-      finishExecution(
-        executionEntry,
-        'fail'
-      );
+      finishExecution(executionEntry, "fail");
 
       return;
     }
 
     setActiveExecutions((previous) => [
-      ...previous.filter(
-        (entry) => entry.key !== key
-      ),
+      ...previous.filter((entry) => entry.key !== key),
       executionEntry,
     ]);
 
-    connectToLogs(
-      executionId,
-      key,
-      caso.id
-    );
+    connectToLogs(executionId, key, caso.id);
   }
 
   /*
@@ -399,22 +360,11 @@ export default function App() {
   function repeatLastExecution() {
     if (!lastExecutionRequest) return;
 
-    const {
-      seccion,
-      caso,
-      idx,
-      configPayload,
-    } = lastExecutionRequest;
+    const { seccion, caso, idx, configPayload } = lastExecutionRequest;
 
     setSelectedExecutionSummary(null);
 
-    runCase(
-      seccion,
-      caso,
-      idx,
-      configPayload,
-      {}
-    );
+    runCase(seccion, caso, idx, configPayload, {});
   }
 
   /*
@@ -427,83 +377,55 @@ export default function App() {
 
     setSelectedExecutionSummary(null);
 
-    console.log(
-      `Ejecutando plan completo: ${selectedPlan.nombre}`
-    );
+    console.log(`Ejecutando plan completo: ${selectedPlan.nombre}`);
 
     for (const seccion of selectedPlan.data.secciones) {
       for (const [idx, caso] of seccion.casos.entries()) {
-        const key = executionKey(
-          seccion,
-          caso,
-          idx
-        );
+        const key = executionKey(seccion, caso, idx);
 
-        const endpoint =
-          caso.configEndpoint ??
-          seccion.configEndpoint;
+        const endpoint = caso.configEndpoint ?? seccion.configEndpoint;
 
-        const payload =
-          caso.configTemplate ??
-          seccion.configTemplate ??
-          [];
+        const payload = caso.configTemplate ?? seccion.configTemplate ?? [];
 
         if (!endpoint) {
-          appendLog(key,
-            `No hay endpoint configurado para ${caso.id}`,
-            'fail'
-          );
+          appendLog(key, `No hay endpoint configurado para ${caso.id}`, "fail");
 
           setLiveStatuses((previous) => ({
             ...previous,
-            [key]: 'fail',
+            [key]: "fail",
           }));
 
           continue;
         }
 
         try {
-          const response = await apiFetch(
-            endpoint,
-            {
-              method: 'POST',
-              headers: {
-                'Content-Type':
-                  'application/json',
-              },
-              body: JSON.stringify(
-                payload
-              ),
-            }
-          );
+          const response = await apiFetch(endpoint, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(payload),
+          });
 
-          const backendInfo =
-            await response.json();
+          const backendInfo = await response.json();
 
           if (!response.ok) {
             throw new Error(
-              backendInfo.error ||
-                `El servidor respondió ${response.status}`
+              backendInfo.error || `El servidor respondió ${response.status}`,
             );
           }
 
-          runCase(
-            seccion,
-            caso,
-            idx,
-            payload,
-            backendInfo
-          );
+          runCase(seccion, caso, idx, payload, backendInfo);
         } catch (error) {
           appendLog(
             key,
             `No se pudo iniciar ${caso.id}: ${error.message}`,
-            'fail'
+            "fail",
           );
 
           setLiveStatuses((previous) => ({
             ...previous,
-            [key]: 'fail',
+            [key]: "fail",
           }));
         }
       }
@@ -533,18 +455,13 @@ export default function App() {
         fallos: summary.failures,
       };
 
-      const blob = new Blob(
-        [JSON.stringify(report, null, 2)],
-        {
-          type: 'application/json',
-        }
-      );
+      const blob = new Blob([JSON.stringify(report, null, 2)], {
+        type: "application/json",
+      });
 
-      const url =
-        window.URL.createObjectURL(blob);
+      const url = window.URL.createObjectURL(blob);
 
-      const link =
-        document.createElement('a');
+      const link = document.createElement("a");
 
       link.href = url;
       link.download = `reporte-${summary.casoId}.json`;
@@ -555,10 +472,7 @@ export default function App() {
 
       window.URL.revokeObjectURL(url);
     } catch (error) {
-      appendLog(
-        `No se pudo descargar el reporte: ${error.message}`,
-        'fail'
-      );
+      appendLog(summary?.key,`No se pudo descargar el reporte: ${error.message}`, "fail");
     }
   }
 
@@ -577,69 +491,49 @@ export default function App() {
       summary.backendData?.evidenciaUrl;
 
     if (evidenceUrl) {
-      window.open(
-        evidenceUrl,
-        '_blank',
-        'noopener,noreferrer'
-      );
+      window.open(evidenceUrl, "_blank", "noopener,noreferrer");
 
       return;
     }
 
-    appendLog(
-      `No hay evidencias disponibles para ${summary.casoId}`,
-      'info'
-    );
+    appendLog(summary?.key, `No hay evidencias disponibles para ${summary.casoId}`, "info");
   }
 
-  const secciones =
-    selectedPlan?.data?.secciones || [];
+  const secciones = selectedPlan?.data?.secciones || [];
 
-  const totalCasos = selectedPlan
-    ? contarCasos(selectedPlan)
-    : 0;
+  const totalCasos = selectedPlan ? contarCasos(selectedPlan) : 0;
 
-  const totalPass =
-    Object.values(liveStatuses).filter(
-      (status) => status === 'pass'
-    ).length;
+  const totalPass = Object.values(liveStatuses).filter(
+    (status) => status === "pass",
+  ).length;
 
-  const totalFail =
-    Object.values(liveStatuses).filter(
-      (status) => status === 'fail'
-    ).length;
+  const totalFail = Object.values(liveStatuses).filter(
+    (status) => status === "fail",
+  ).length;
 
-  const totalRunning =
-    Object.values(liveStatuses).filter(
-      (status) => status === 'running'
-    ).length;
+  const totalRunning = Object.values(liveStatuses).filter(
+    (status) => status === "running",
+  ).length;
 
   return (
-    <div
-      className={`app-shell ${
-        sidebarVisible ? '' : 'collapsed'
-      }`}
-    >
+    <div className={`app-shell ${sidebarVisible ? "" : "collapsed"}`}>
       <Sidebar
         projects={projects}
         selectedPlanId={selectedPlan?.id}
         onSelectPlan={(plan) => {
-          eventSourcesRef.current.forEach(
-            (source) => source.close()
-          );
+          eventSourcesRef.current.forEach((source) => source.close());
 
           eventSourcesRef.current.clear();
 
           setSelectedPlan(plan);
           setLiveStatuses({});
+          setLogsByExecution({});
           setActiveExecutions([]);
           setExecutionHistory([]);
           setSelectedExecutionSummary(null);
-          setLogLines([]);
+          setVisibleLogExecution(null);
         }}
-        onToggle={() =>
-          setSidebarVisible((v) => !v)
-        }
+        onToggle={() => setSidebarVisible((v) => !v)}
         collapsed={!sidebarVisible}
       />
 
@@ -647,51 +541,35 @@ export default function App() {
         {!selectedPlan ? (
           <p
             style={{
-              color:
-                'var(--text-secondary)',
+              color: "var(--text-secondary)",
             }}
           >
-            Selecciona un plan de casos de
-            prueba en el panel izquierdo.
+            Selecciona un plan de casos de prueba en el panel izquierdo.
           </p>
         ) : (
           <>
             <div className="main-header">
-              <h1>
-                {selectedPlan.nombre}
-              </h1>
+              <h1>{selectedPlan.nombre}</h1>
 
               <p className="subtitle">
-                {totalCasos} casos de prueba en{' '}
-                {secciones.length} secciones
+                {totalCasos} casos de prueba en {secciones.length} secciones
               </p>
             </div>
 
-            <MetaBar
-              meta={selectedPlan.data?.meta}
-            />
+            <MetaBar meta={selectedPlan.data?.meta} />
 
             <div className="toolbar">
               <div className="summary-pills">
-                <span className="pill pass">
-                  Exitosos {totalPass}
-                </span>
+                <span className="pill pass">Exitosos {totalPass}</span>
 
-                <span className="pill fail">
-                  Fallidos {totalFail}
-                </span>
+                <span className="pill fail">Fallidos {totalFail}</span>
 
                 {totalRunning > 0 && (
-                  <span className="pill idle">
-                    Ejecutando {totalRunning}
-                  </span>
+                  <span className="pill idle">Ejecutando {totalRunning}</span>
                 )}
               </div>
 
-              <button
-                className="btn primary"
-                onClick={runAllVisible}
-              >
+              <button className="btn primary" onClick={runAllVisible}>
                 <span className="icon-play" />
                 Ejecutar plan completo
               </button>
@@ -708,13 +586,9 @@ export default function App() {
                       EJECUCIÓN FINALIZADA
                     </div>
 
-                    <h2>
-                      {selectedExecutionSummary.casoId}
-                    </h2>
+                    <h2>{selectedExecutionSummary.casoId}</h2>
 
-                    <p>
-                      {selectedExecutionSummary.casoTitulo}
-                    </p>
+                    <p>{selectedExecutionSummary.casoTitulo}</p>
                   </div>
 
                   <span
@@ -722,10 +596,9 @@ export default function App() {
                       selectedExecutionSummary.finalStatus
                     }`}
                   >
-                    {selectedExecutionSummary.finalStatus ===
-                    'pass'
-                      ? '✓ EXITOSO'
-                      : '✕ FALLIDO'}
+                    {selectedExecutionSummary.finalStatus === "pass"
+                      ? "✓ EXITOSO"
+                      : "✕ FALLIDO"}
                   </span>
                 </div>
 
@@ -736,14 +609,10 @@ export default function App() {
                     <span className="timeline-dot" />
 
                     <div>
-                      <strong>
-                        Ejecución iniciada
-                      </strong>
+                      <strong>Ejecución iniciada</strong>
 
                       <span>
-                        {formatDateTime(
-                          selectedExecutionSummary.startedAt
-                        )}
+                        {formatDateTime(selectedExecutionSummary.startedAt)}
                       </span>
                     </div>
                   </div>
@@ -752,14 +621,10 @@ export default function App() {
                     <span className="timeline-dot" />
 
                     <div>
-                      <strong>
-                        Ejecución finalizada
-                      </strong>
+                      <strong>Ejecución finalizada</strong>
 
                       <span>
-                        {formatDateTime(
-                          selectedExecutionSummary.finishedAt
-                        )}
+                        {formatDateTime(selectedExecutionSummary.finishedAt)}
                       </span>
                     </div>
                   </div>
@@ -768,23 +633,17 @@ export default function App() {
                 <div className="execution-metrics">
                   <div className="execution-metric">
                     <span>Duración</span>
-                    <strong>
-                      {selectedExecutionSummary.duration}
-                    </strong>
+                    <strong>{selectedExecutionSummary.duration}</strong>
                   </div>
 
                   <div className="execution-metric">
                     <span>Ambiente</span>
-                    <strong>
-                      {selectedExecutionSummary.environment}
-                    </strong>
+                    <strong>{selectedExecutionSummary.environment}</strong>
                   </div>
 
                   <div className="execution-metric">
                     <span>Pasos ejecutados</span>
-                    <strong>
-                      {selectedExecutionSummary.stepsExecuted}
-                    </strong>
+                    <strong>{selectedExecutionSummary.stepsExecuted}</strong>
                   </div>
 
                   <div className="execution-metric">
@@ -792,8 +651,8 @@ export default function App() {
                     <strong
                       className={
                         selectedExecutionSummary.failures > 0
-                          ? 'metric-danger'
-                          : ''
+                          ? "metric-danger"
+                          : ""
                       }
                     >
                       {selectedExecutionSummary.failures}
@@ -805,14 +664,7 @@ export default function App() {
                   <button
                     className="btn"
                     onClick={() => {
-                      setVisibleLogSection(
-                        selectedExecutionSummary.seccionNombre
-                      );
-
-                      window.scrollTo({
-                        top: document.body.scrollHeight,
-                        behavior: 'smooth',
-                      });
+                      setVisibleLogExecution(selectedExecutionSummary.key);
                     }}
                   >
                     Ver log
@@ -820,30 +672,19 @@ export default function App() {
 
                   <button
                     className="btn"
-                    onClick={() =>
-                      viewEvidence(
-                        selectedExecutionSummary
-                      )
-                    }
+                    onClick={() => viewEvidence(selectedExecutionSummary)}
                   >
                     Ver evidencias
                   </button>
 
                   <button
                     className="btn"
-                    onClick={() =>
-                      downloadReport(
-                        selectedExecutionSummary
-                      )
-                    }
+                    onClick={() => downloadReport(selectedExecutionSummary)}
                   >
                     Descargar reporte
                   </button>
 
-                  <button
-                    className="btn primary"
-                    onClick={repeatLastExecution}
-                  >
+                  <button className="btn primary" onClick={repeatLastExecution}>
                     <span className="icon-play" />
                     Repetir prueba
                   </button>
@@ -857,76 +698,57 @@ export default function App() {
             {executionHistory.length > 0 && (
               <section className="execution-history">
                 <div className="execution-history-header">
-                  <h3>
-                    Historial de ejecuciones
-                  </h3>
+                  <h3>Historial de ejecuciones</h3>
 
                   <span>
                     {executionHistory.length} ejecución
-                    {executionHistory.length !== 1
-                      ? 'es'
-                      : ''}
+                    {executionHistory.length !== 1 ? "es" : ""}
                   </span>
                 </div>
 
                 <div className="execution-history-list">
-                  {executionHistory
-                    .slice(0, 5)
-                    .map((execution) => (
-                      <button
-                        key={`${execution.key}-${execution.finishedAt}`}
-                        className="execution-history-item"
-                        onClick={() =>
-                          setSelectedExecutionSummary(
-                            execution
-                          )
-                        }
+                  {executionHistory.slice(0, 5).map((execution) => (
+                    <button
+                      key={`${execution.key}-${execution.finishedAt}`}
+                      className="execution-history-item"
+                      onClick={() => setSelectedExecutionSummary(execution)}
+                    >
+                      <span
+                        className={`history-status ${execution.finalStatus}`}
+                      />
+
+                      <span className="history-case">{execution.casoId}</span>
+
+                      <span className="history-date">
+                        {formatDateTime(execution.finishedAt)}
+                      </span>
+
+                      <span className="history-duration">
+                        {execution.duration}
+                      </span>
+
+                      <span
+                        className={`history-result ${execution.finalStatus}`}
                       >
-                        <span
-                          className={`history-status ${
-                            execution.finalStatus
-                          }`}
-                        />
-
-                        <span className="history-case">
-                          {execution.casoId}
-                        </span>
-
-                        <span className="history-date">
-                          {formatDateTime(
-                            execution.finishedAt
-                          )}
-                        </span>
-
-                        <span className="history-duration">
-                          {execution.duration}
-                        </span>
-
-                        <span
-                          className={`history-result ${
-                            execution.finalStatus
-                          }`}
-                        >
-                          {execution.finalStatus ===
-                          'pass'
-                            ? 'Exitoso'
-                            : 'Fallido'}
-                        </span>
-                      </button>
-                    ))}
+                        {execution.finalStatus === "pass"
+                          ? "Exitoso"
+                          : "Fallido"}
+                      </span>
+                    </button>
+                  ))}
                 </div>
               </section>
             )}
 
             {secciones.map((seccion) => (
               <TestSection
-  key={seccion.nombre}
-  seccion={seccion}
-  liveStatuses={liveStatuses}
-  onRunCase={runCase}
-  logsByExecution={logsByExecution}
-/>
-
+                key={seccion.nombre}
+                seccion={seccion}
+                liveStatuses={liveStatuses}
+                onRunCase={runCase}
+                logsByExecution={logsByExecution}
+                visibleLogExecution={visibleLogExecution}
+              />
             ))}
           </>
         )}
@@ -935,9 +757,7 @@ export default function App() {
       {!sidebarVisible && (
         <button
           className="sidebar-open-btn"
-          onClick={() =>
-            setSidebarVisible(true)
-          }
+          onClick={() => setSidebarVisible(true)}
           aria-label="Mostrar sidebar"
         >
           ☰
