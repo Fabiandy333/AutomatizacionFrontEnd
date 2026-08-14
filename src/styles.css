@@ -1411,3 +1411,25 @@ textarea:focus-visible {
     flex: 1 1 100%;
   }
 }
+
+.case-execution-container.log-selected {
+  border-radius: 12px;
+  transition: all 0.3s ease;
+}
+
+.case-log.log-highlight {
+  border: 2px solid var(--accent);
+  border-radius: 10px;
+  box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.12);
+  animation: logHighlight 1.5s ease;
+}
+
+@keyframes logHighlight {
+  0% {
+    box-shadow: 0 0 0 8px rgba(59, 130, 246, 0.3);
+  }
+
+  100% {
+    box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.12);
+  }
+}

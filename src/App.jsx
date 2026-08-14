@@ -83,6 +83,9 @@ export default function App() {
   const [lastExecutionRequest, setLastExecutionRequest] = useState(null);
   const eventSourcesRef = useRef(new Map());
 
+  const [visibleLogExecution, setVisibleLogExecution] =
+  useState(null);
+
   /*
    * Polling del estado de las ejecuciones
    */
@@ -528,6 +531,7 @@ export default function App() {
           setActiveExecutions([]);
           setExecutionHistory([]);
           setSelectedExecutionSummary(null);
+          setVisibleLogExecution(null);
         }}
         onToggle={() => setSidebarVisible((v) => !v)}
         collapsed={!sidebarVisible}
@@ -660,14 +664,7 @@ export default function App() {
                   <button
                     className="btn"
                     onClick={() => {
-                      setVisibleLogSection(
-                        selectedExecutionSummary.seccionNombre,
-                      );
-
-                      window.scrollTo({
-                        top: document.body.scrollHeight,
-                        behavior: "smooth",
-                      });
+                      setVisibleLogExecution(selectedExecutionSummary.key);
                     }}
                   >
                     Ver log
@@ -750,6 +747,7 @@ export default function App() {
                 liveStatuses={liveStatuses}
                 onRunCase={runCase}
                 logsByExecution={logsByExecution}
+                visibleLogExecution={visibleLogExecution}
               />
             ))}
           </>
