@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from "react";
+
 import Sidebar from "./components/Sidebar";
 import MetaBar from "./components/MetaBar";
 import TestSection from "./components/TestSection";
-import LogPanel from "./components/LogPanel";
+
 import { projects, contarCasos } from "./data/projects";
+
 import { apiFetch, API_ENDPOINTS, API_TOKEN } from "./config/api";
 
 function findFirstPlan() {
@@ -12,7 +14,9 @@ function findFirstPlan() {
       ? project.subproyectos.flatMap((subproject) => subproject.planes)
       : project.planes;
 
-    if (plans.length) return plans[0];
+    if (plans.length) {
+      return plans[0];
+    }
   }
 
   return null;
@@ -57,107 +61,94 @@ function formatDuration(start, end = Date.now()) {
 }
 
 function isFinished(status) {
-  return ["exitoso", "fallido", "requiere_revision"].includes(status);
+  return ["exitoso", "fallido", "requiere_revision"].includes(
+    String(status || "").toLowerCase(),
+  );
 }
 
 function toLiveStatus(status) {
-  return status === "exitoso" ? "pass" : "fail";
+  return String(status || "").toLowerCase() === "exitoso" ? "pass" : "fail";
 }
 
 function executionKey(seccion, caso, idx) {
   return `${seccion.nombre}-${caso.id}-${idx}`;
 }
 
+function normalizeExecutionStatus(data) {
+  return (data?.estado || data?.status || data?.state || "en_cola")
+    .toString()
+    .trim()
+    .toLowerCase();
+}
+
+function normalizeExecutionData(data, fallback = {}) {
+  return {
+    ...fallback,
+    ...data,
+
+    estado: normalizeExecutionStatus(data),
+
+    posicionCola:
+      data?.posicionCola ??
+      data?.posicion ??
+      fallback?.posicionCola ??
+      fallback?.posicion ??
+      null,
+
+    totalCola:
+      data?.totalCola ??
+      data?.total ??
+      fallback?.totalCola ??
+      fallback?.total ??
+      null,
+
+    esperaRestanteMs:
+      Number(data?.esperaRestanteMs) || Number(fallback?.esperaRestanteMs) || 0,
+
+    ejecutando: data?.ejecutando ?? fallback?.ejecutando ?? false,
+
+    esperandoOtp:
+      data?.esperandoOtp ??
+      (normalizeExecutionStatus(data) === "esperando_otp" ||
+        fallback?.esperandoOtp ||
+        false),
+
+    iniciadoEn: data?.iniciadoEn ?? fallback?.iniciadoEn ?? null,
+
+    finalizadoEn: data?.finalizadoEn ?? fallback?.finalizadoEn ?? null,
+  };
+}
+
 export default function App() {
   const [selectedPlan, setSelectedPlan] = useState(findFirstPlan);
+
   const [liveStatuses, setLiveStatuses] = useState({});
+
   const [logsByExecution, setLogsByExecution] = useState({});
+
   const [activeExecutions, setActiveExecutions] = useState([]);
+
   const [sidebarVisible, setSidebarVisible] = useState(true);
-  // Ejecuciones terminadas que aparecen en el resumen
+
   const [executionHistory, setExecutionHistory] = useState([]);
-  // Ejecución actualmente seleccionada para mostrar el resumen
+
   const [selectedExecutionSummary, setSelectedExecutionSummary] =
     useState(null);
-  // Para repetir una prueba
+
   const [lastExecutionRequest, setLastExecutionRequest] = useState(null);
+
+  const [executionStates, setExecutionStates] = useState({});
+
   const eventSourcesRef = useRef(new Map());
 
-  const [visibleLogExecution, setVisibleLogExecution] =
-  useState(null);
+  const [visibleLogExecution, setVisibleLogExecution] = useState(null);
 
-  /*
-   * Polling del estado de las ejecuciones
-   */
-  useEffect(() => {
-    if (!activeExecutions.some((entry) => !isFinished(entry.status))) {
-      return undefined;
-    }
-
-    const interval = setInterval(async () => {
-      const updated = await Promise.all(
-        activeExecutions.map(async (entry) => {
-          if (isFinished(entry.status)) return entry;
-
-          try {
-            const response = await apiFetch(
-              API_ENDPOINTS.PASAPORTES_ESTADO(entry.executionId),
-            );
-
-            const data = await response.json();
-
-            const status = (data.estado || data.status || data.state || "")
-              .toString()
-              .trim()
-              .toLowerCase();
-
-            return {
-              ...entry,
-              status: status || entry.status,
-              backendData: data,
-            };
-          } catch {
-            return entry;
-          }
-        }),
-      );
-
-      updated.forEach((entry) => {
-        if (!isFinished(entry.status)) return;
-
-        eventSourcesRef.current.get(entry.key)?.close();
-        eventSourcesRef.current.delete(entry.key);
-
-        const finalStatus = toLiveStatus(entry.status);
-
-        setLiveStatuses((previous) => ({
-          ...previous,
-          [entry.key]: finalStatus,
-        }));
-
-        finishExecution(entry, finalStatus);
-      });
-
-      const remaining = updated.filter((entry) => !isFinished(entry.status));
-
-      setActiveExecutions(remaining);
-    }, 3000);
-
-    return () => clearInterval(interval);
-  }, [activeExecutions]);
-
-  useEffect(() => {
-    return () => {
-      eventSourcesRef.current.forEach((source) => source.close());
-      eventSourcesRef.current.clear();
-    };
-  }, []);
-
-  function appendLog(executionKey, text, type = "info") {
+  function appendLog(executionKeyValue, text, type = "info") {
     setLogsByExecution((previous) => ({
       ...previous,
-      [executionKey]: [
-        ...(previous[executionKey] || []),
+
+      [executionKeyValue]: [
+        ...(previous[executionKeyValue] || []),
         {
           time: nowTime(),
           text,
@@ -167,9 +158,6 @@ export default function App() {
     }));
   }
 
-  /*
-   * Cuando termina una ejecución se construye el resumen.
-   */
   function finishExecution(entry, finalStatus) {
     const finishedAt = new Date();
 
@@ -177,6 +165,7 @@ export default function App() {
       ...entry,
 
       finishedAt,
+
       finalStatus,
 
       duration: formatDuration(entry.startedAt, finishedAt),
@@ -207,14 +196,43 @@ export default function App() {
     setSelectedExecutionSummary(summary);
 
     appendLog(
-  entry.key,
-  `${entry.caseId} finalizó: ${
-    finalStatus === 'pass'
-      ? 'EXITOSO'
-      : 'FALLIDO'
-  }`,
-  finalStatus === 'pass' ? 'ok' : 'fail'
-);
+      entry.key,
+      `${entry.casoId} finalizó: ${
+        finalStatus === "pass" ? "EXITOSO" : "FALLIDO"
+      }`,
+      finalStatus === "pass" ? "ok" : "fail",
+    );
+
+    setExecutionStates((previous) => ({
+      ...previous,
+
+      [entry.key]: {
+        ...previous[entry.key],
+
+        executionId: entry.executionId,
+
+        status: status || entry.status,
+
+        estado: status || entry.status,
+
+        posicionCola:
+          data.posicionCola ?? previous[entry.key]?.posicionCola ?? null,
+
+        totalCola: data.totalCola ?? previous[entry.key]?.totalCola ?? null,
+
+        esperaRestanteMs: Number(data.esperaRestanteMs) || 0,
+
+        ejecutando: data.ejecutando ?? false,
+
+        iniciadoEn: data.iniciadoEn ?? null,
+
+        finalizadoEn: data.finalizadoEn ?? null,
+
+        esperandoOtp: Boolean(data.esperandoOtp || status === "esperando_otp"),
+
+        backendData: data,
+      },
+    }));
   }
 
   function connectToLogs(executionId, statusKey, caseId) {
@@ -246,14 +264,147 @@ export default function App() {
 
     eventSource.onerror = () => {
       console.warn(
-        `Conexión de logs interrumpida para ${caseId}; reintentando.`,
+        `Conexión de logs interrumpida para ${caseId}; el navegador intentará reconectar.`,
       );
     };
   }
 
-  /*
-   * Registra una ejecución creada por el backend.
-   */
+  useEffect(() => {
+    if (!activeExecutions.some((entry) => !isFinished(entry.status))) {
+      return undefined;
+    }
+
+    const interval = setInterval(async () => {
+      const updated = await Promise.all(
+        activeExecutions.map(async (entry) => {
+          if (isFinished(entry.status)) {
+            return entry;
+          }
+
+          if (!entry.executionId) {
+            return entry;
+          }
+
+          try {
+            const response = await apiFetch(
+              API_ENDPOINTS.PASAPORTES_ESTADO(entry.executionId),
+            );
+
+            const data = await response.json();
+
+            if (!response.ok) {
+              throw new Error(
+                data?.error || `El servidor respondió ${response.status}`,
+              );
+            }
+
+            const status = normalizeExecutionStatus(data);
+
+            const enrichedData = normalizeExecutionData(data, entry);
+
+            setExecutionStates((previous) => ({
+              ...previous,
+
+              [entry.key]: {
+                ...previous[entry.key],
+
+                executionId: entry.executionId,
+
+                estado: status,
+
+                status,
+
+                posicionCola: enrichedData.posicionCola,
+
+                totalCola: enrichedData.totalCola,
+
+                esperaRestanteMs: enrichedData.esperaRestanteMs,
+
+                ejecutando: enrichedData.ejecutando,
+
+                iniciadoEn: enrichedData.iniciadoEn,
+
+                finalizadoEn: enrichedData.finalizadoEn,
+
+                esperandoOtp: enrichedData.esperandoOtp,
+
+                backendData: data,
+              },
+            }));
+
+            if (status === "esperando_otp" && entry.executionId) {
+              appendLog(
+                entry.key,
+                "El navegador está esperando el código OTP enviado al correo.",
+                "info",
+              );
+            }
+
+            return {
+              ...entry,
+
+              status,
+
+              estado: status,
+
+              posicionCola: enrichedData.posicionCola,
+
+              totalCola: enrichedData.totalCola,
+
+              esperaRestanteMs: enrichedData.esperaRestanteMs,
+
+              ejecutando: enrichedData.ejecutando,
+
+              esperandoOtp: enrichedData.esperandoOtp,
+
+              backendData: data,
+            };
+          } catch (error) {
+            console.warn(
+              `No se pudo consultar el estado de ${entry.executionId}:`,
+              error,
+            );
+
+            return entry;
+          }
+        }),
+      );
+
+      updated.forEach((entry) => {
+        if (!isFinished(entry.status)) {
+          return;
+        }
+
+        eventSourcesRef.current.get(entry.key)?.close();
+
+        eventSourcesRef.current.delete(entry.key);
+
+        const finalStatus = toLiveStatus(entry.status);
+
+        setLiveStatuses((previous) => ({
+          ...previous,
+          [entry.key]: finalStatus,
+        }));
+
+        finishExecution(entry, finalStatus);
+      });
+
+      const remaining = updated.filter((entry) => !isFinished(entry.status));
+
+      setActiveExecutions(remaining);
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [activeExecutions]);
+
+  useEffect(() => {
+    return () => {
+      eventSourcesRef.current.forEach((source) => source.close());
+
+      eventSourcesRef.current.clear();
+    };
+  }, []);
+
   function runCase(seccion, caso, idx, configPayload, backendInfo) {
     const key = executionKey(seccion, caso, idx);
 
@@ -264,7 +415,7 @@ export default function App() {
       [key]: "running",
     }));
 
-    appendLog(key, `Iniciando ${caso.id} - ${caso.criterio}`);
+    appendLog(key, `Solicitud recibida para ${caso.id} - ${caso.criterio}`);
 
     if (configPayload) {
       const records = Array.isArray(configPayload) ? configPayload.length : 1;
@@ -280,27 +431,43 @@ export default function App() {
       execution?._id ||
       execution?.uuid;
 
-    const status = (
-      execution?.estado ||
-      execution?.status ||
-      execution?.state ||
-      "running"
-    )
-      .toString()
-      .trim()
-      .toLowerCase();
+    const status = normalizeExecutionStatus(execution);
+
+    const normalizedExecution = normalizeExecutionData(execution);
 
     const executionEntry = {
       key,
+
       executionId,
+
       status,
+
+      estado: status,
+
       startedAt,
+
       seccionNombre: seccion.nombre,
+
       casoId: caso.id,
+
       casoTitulo: caso.criterio,
+
       caso,
+
       configPayload,
+
+      posicionCola: normalizedExecution.posicionCola,
+
+      totalCola: normalizedExecution.totalCola,
+
+      esperaRestanteMs: normalizedExecution.esperaRestanteMs,
+
+      ejecutando: normalizedExecution.ejecutando,
+
+      esperandoOtp: normalizedExecution.esperandoOtp,
+
       backendData: execution,
+
       environment:
         execution?.ambiente ||
         execution?.environment ||
@@ -308,7 +475,36 @@ export default function App() {
         "QA",
     };
 
-    // Guardamos la última ejecución para poder repetirla
+    setExecutionStates((previous) => ({
+      ...previous,
+
+      [key]: {
+        ...previous[key],
+
+        executionId,
+
+        estado: status,
+
+        status,
+
+        posicionCola: executionEntry.posicionCola,
+
+        totalCola: executionEntry.totalCola,
+
+        esperaRestanteMs: executionEntry.esperaRestanteMs,
+
+        ejecutando: executionEntry.ejecutando,
+
+        esperandoOtp: executionEntry.esperandoOtp,
+
+        iniciadoEn: execution?.iniciadoEn ?? startedAt,
+
+        finalizadoEn: execution?.finalizadoEn ?? null,
+
+        backendData: execution,
+      },
+    }));
+
     setLastExecutionRequest({
       seccion,
       caso,
@@ -348,28 +544,66 @@ export default function App() {
 
     setActiveExecutions((previous) => [
       ...previous.filter((entry) => entry.key !== key),
+
       executionEntry,
     ]);
 
     connectToLogs(executionId, key, caso.id);
   }
 
-  /*
-   * Ejecutar nuevamente la última prueba.
-   */
-  function repeatLastExecution() {
-    if (!lastExecutionRequest) return;
+  async function repeatLastExecution() {
+    if (!lastExecutionRequest) {
+      return;
+    }
 
     const { seccion, caso, idx, configPayload } = lastExecutionRequest;
 
     setSelectedExecutionSummary(null);
 
-    runCase(seccion, caso, idx, configPayload, {});
+    const endpoint = caso.configEndpoint ?? seccion.configEndpoint;
+
+    if (!endpoint) {
+      appendLog(
+        executionKey(seccion, caso, idx),
+        `No hay endpoint configurado para repetir ${caso.id}`,
+        "fail",
+      );
+
+      return;
+    }
+
+    try {
+      const response = await apiFetch(endpoint, {
+        method: "POST",
+
+        headers: {
+          "Content-Type": "application/json",
+        },
+
+        body: JSON.stringify(configPayload),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.error || `El servidor respondió ${response.status}`,
+        );
+      }
+
+      runCase(seccion, caso, idx, configPayload, data);
+    } catch (error) {
+      const key = executionKey(seccion, caso, idx);
+
+      appendLog(key, `No se pudo repetir ${caso.id}: ${error.message}`, "fail");
+
+      setLiveStatuses((previous) => ({
+        ...previous,
+        [key]: "fail",
+      }));
+    }
   }
 
-  /*
-   * Ejecutar todo el plan.
-   */
   async function runAllVisible() {
     if (!selectedPlan?.data?.secciones) {
       return;
@@ -401,9 +635,11 @@ export default function App() {
         try {
           const response = await apiFetch(endpoint, {
             method: "POST",
+
             headers: {
               "Content-Type": "application/json",
             },
+
             body: JSON.stringify(payload),
           });
 
@@ -432,26 +668,31 @@ export default function App() {
     }
   }
 
-  /*
-   * Descargar reporte.
-   *
-   * Si posteriormente tienes un endpoint real de reportes,
-   * solamente cambia la URL aquí.
-   */
   async function downloadReport(summary) {
-    if (!summary) return;
+    if (!summary) {
+      return;
+    }
 
     try {
       const report = {
         caso: summary.casoId,
+
         criterio: summary.casoTitulo,
+
         ejecucion: summary.executionId,
+
         estado: summary.finalStatus,
+
         inicio: summary.startedAt,
+
         finalizacion: summary.finishedAt,
+
         duracion: summary.duration,
+
         ambiente: summary.environment,
+
         pasosEjecutados: summary.stepsExecuted,
+
         fallos: summary.failures,
       };
 
@@ -464,26 +705,29 @@ export default function App() {
       const link = document.createElement("a");
 
       link.href = url;
+
       link.download = `reporte-${summary.casoId}.json`;
 
       document.body.appendChild(link);
+
       link.click();
+
       link.remove();
 
       window.URL.revokeObjectURL(url);
     } catch (error) {
-      appendLog(summary?.key,`No se pudo descargar el reporte: ${error.message}`, "fail");
+      appendLog(
+        summary?.key,
+        `No se pudo descargar el reporte: ${error.message}`,
+        "fail",
+      );
     }
   }
 
-  /*
-   * Evidencias.
-   *
-   * Si el backend devuelve una URL de evidencia,
-   * se abre automáticamente.
-   */
   function viewEvidence(summary) {
-    if (!summary) return;
+    if (!summary) {
+      return;
+    }
 
     const evidenceUrl =
       summary.backendData?.evidenciasUrl ||
@@ -496,7 +740,11 @@ export default function App() {
       return;
     }
 
-    appendLog(summary?.key, `No hay evidencias disponibles para ${summary.casoId}`, "info");
+    appendLog(
+      summary?.key,
+      `No hay evidencias disponibles para ${summary.casoId}`,
+      "info",
+    );
   }
 
   const secciones = selectedPlan?.data?.secciones || [];
@@ -526,14 +774,24 @@ export default function App() {
           eventSourcesRef.current.clear();
 
           setSelectedPlan(plan);
+
           setLiveStatuses({});
+
           setLogsByExecution({});
+
           setActiveExecutions([]);
+
+          setExecutionStates({});
+
           setExecutionHistory([]);
+
           setSelectedExecutionSummary(null);
+
           setVisibleLogExecution(null);
+
+          setLastExecutionRequest(null);
         }}
-        onToggle={() => setSidebarVisible((v) => !v)}
+        onToggle={() => setSidebarVisible((value) => !value)}
         collapsed={!sidebarVisible}
       />
 
@@ -575,9 +833,6 @@ export default function App() {
               </button>
             </div>
 
-            {/*
-             * RESUMEN DE EJECUCIÓN
-             */}
             {selectedExecutionSummary && (
               <section className="execution-summary">
                 <div className="execution-summary-header">
@@ -633,21 +888,25 @@ export default function App() {
                 <div className="execution-metrics">
                   <div className="execution-metric">
                     <span>Duración</span>
+
                     <strong>{selectedExecutionSummary.duration}</strong>
                   </div>
 
                   <div className="execution-metric">
                     <span>Ambiente</span>
+
                     <strong>{selectedExecutionSummary.environment}</strong>
                   </div>
 
                   <div className="execution-metric">
                     <span>Pasos ejecutados</span>
+
                     <strong>{selectedExecutionSummary.stepsExecuted}</strong>
                   </div>
 
                   <div className="execution-metric">
                     <span>Fallos</span>
+
                     <strong
                       className={
                         selectedExecutionSummary.failures > 0
@@ -663,9 +922,9 @@ export default function App() {
                 <div className="execution-actions">
                   <button
                     className="btn"
-                    onClick={() => {
-                      setVisibleLogExecution(selectedExecutionSummary.key);
-                    }}
+                    onClick={() =>
+                      setVisibleLogExecution(selectedExecutionSummary.key)
+                    }
                   >
                     Ver log
                   </button>
@@ -692,9 +951,6 @@ export default function App() {
               </section>
             )}
 
-            {/*
-             * Historial reciente
-             */}
             {executionHistory.length > 0 && (
               <section className="execution-history">
                 <div className="execution-history-header">
@@ -745,6 +1001,7 @@ export default function App() {
                 key={seccion.nombre}
                 seccion={seccion}
                 liveStatuses={liveStatuses}
+                executionStates={executionStates}
                 onRunCase={runCase}
                 logsByExecution={logsByExecution}
                 visibleLogExecution={visibleLogExecution}
