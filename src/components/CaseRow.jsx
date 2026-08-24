@@ -1,172 +1,539 @@
-import { useState, useEffect } from 'react'
-import ConfigModal from './ConfigModal'
-import OtpModal from './OtpModal'
-import LiveScreenViewer from './LiveScreenViewer'
-import { apiFetch, API_ENDPOINTS } from '../config/api'
+import { useEffect, useState } from "react";
 
-const POLL_INTERVAL_MS = 3000
+import ConfigModal from "./ConfigModal";
+import OtpModal from "./OtpModal";
+import LiveScreenViewer from "./LiveScreenViewer";
 
-// Mapea el estado tal como viene del CSV (EXITOSO / FALLIDO) al estado
-// visual de la corrida en vivo. Si el usuario ya ejecuto el script en esta
-// sesion, ese resultado (liveStatus) tiene prioridad sobre el historico.
+import { apiFetch, API_ENDPOINTS } from "../config/api";
+
+const ESTADOS_FINALIZADOS = ["exitoso", "fallido", "requiere_revision"];
+
+function normalizeStatus(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase();
+}
+
 function resolveBadge(estadoHistorico, liveStatus) {
-  if (liveStatus === 'running') return { text: 'Ejecutando', cls: 'running' }
-  if (liveStatus === 'pass') return { text: 'Exitoso', cls: 'pass' }
-  if (liveStatus === 'fail') return { text: 'Fallido', cls: 'fail' }
-  if (estadoHistorico === 'EXITOSO') return { text: 'Exitoso (ult. corrida)', cls: 'pass' }
-  if (estadoHistorico === 'FALLIDO') return { text: 'Fallido (ult. corrida)', cls: 'fail' }
-  return { text: 'Sin ejecutar', cls: 'idle' }
+  if (liveStatus === "running") {
+    return {
+      text: "Ejecutando",
+      cls: "running",
+    };
+  }
+
+  if (liveStatus === "pass") {
+    return {
+      text: "Exitoso",
+      cls: "pass",
+    };
+  }
+
+  if (liveStatus === "fail") {
+    return {
+      text: "Fallido",
+      cls: "fail",
+    };
+  }
+
+  if (normalizeStatus(estadoHistorico) === "exitoso") {
+    return {
+      text: "Exitoso (ult. corrida)",
+      cls: "pass",
+    };
+  }
+
+  if (normalizeStatus(estadoHistorico) === "fallido") {
+    return {
+      text: "Fallido (ult. corrida)",
+      cls: "fail",
+    };
+  }
+
+  return {
+    text: "Sin ejecutar",
+    cls: "idle",
+  };
 }
 
-// caso.configTemplate permite que cada caso traiga su propia plantilla
-// (por ejemplo, un caso de "Agendar cita" trae la lista de usuarios a
-// agendar). Si el caso no define una, se usa la plantilla generica
-// importada arriba como valor por defecto.
-function resolveExecutionId(exec) {
-  return exec?.executionId || exec?.id || exec?._id || exec?.uuid || null
+function formatCountdown(milliseconds) {
+  if (!milliseconds || milliseconds <= 0) {
+    return "0s";
+  }
+
+  const totalSeconds = Math.ceil(milliseconds / 1000);
+
+  const minutes = Math.floor(totalSeconds / 60);
+
+  const seconds = totalSeconds % 60;
+
+  if (minutes > 0) {
+    return `${minutes}m ${seconds.toString().padStart(2, "0")}s`;
+  }
+
+  return `${seconds}s`;
 }
 
-function normalizeStatus(status) {
-  if (!status) return ''
-  return status.toString().trim().toLowerCase()
+function getQueueMessage(queueState) {
+  if (!queueState) {
+    return null;
+  }
+
+  const estado = normalizeStatus(
+    queueState.estado || queueState.status || queueState.state,
+  );
+
+  const posicion = queueState.posicion ?? queueState.posicionCola;
+
+  const total = queueState.total ?? queueState.totalCola;
+
+  const esperaRestanteMs = Number(queueState.esperaRestanteMs) || 0;
+
+  const estimacionMs = Number(queueState.estimacionMs) || 0;
+
+  const estimacionTexto = queueState.estimacionTexto;
+
+  if (estado === "en_cola") {
+    return {
+      type: "queue",
+
+      text:
+        posicion > 0
+          ? `En cola · posición ${posicion}${total ? ` de ${total}` : ""}`
+          : "En cola",
+
+      detail:
+        estimacionTexto ||
+        (estimacionMs > 0
+          ? `Tiempo estimado: ${formatCountdown(estimacionMs)}`
+          : esperaRestanteMs > 0
+            ? `Tiempo estimado: ${formatCountdown(esperaRestanteMs)}`
+            : "Esperando disponibilidad..."),
+    };
+  }
+
+  if (estado === "esperando_ventana") {
+    return {
+      type: "waiting",
+
+      text: "Próxima ejecución",
+
+      detail:
+        esperaRestanteMs > 0
+          ? `Comienza aproximadamente en ${formatCountdown(esperaRestanteMs)}`
+          : estimacionTexto || "Iniciando próximamente...",
+    };
+  }
+
+  if (estado === "en_progreso") {
+    return {
+      type: "running",
+
+      text: "Ejecutando ahora",
+
+      detail: "El navegador está realizando el proceso.",
+    };
+  }
+
+  if (estado === "esperando_otp") {
+    return {
+      type: "waiting",
+
+      text: "Esperando código OTP",
+
+      detail: "Ingresa el código recibido en el correo.",
+    };
+  }
+
+  return null;
 }
 
-export default function CaseRow({ caso, liveStatus, configTemplate, configSchema,configEndpoint, onRun }) {
-  const [open, setOpen] = useState(false)
-  const [configOpen, setConfigOpen] = useState(false)
-  // "config" guarda la ultima version confirmada por el usuario en esta sesion,
-  // para que el boton de play (sin pasar por el modal) reutilice lo ya revisado.
-  const resolvedConfig =
-  caso.configTemplate ??
-  configTemplate ??
-  []
+function extractExecutionList(backendInfo) {
+  if (!backendInfo) {
+    return [];
+  }
 
-const [config, setConfig] = useState(resolvedConfig)
-const schema =
-  caso.configSchema ??
-  configTemplate?.schema ??
-  configSchema ??
-  null
-  const [ejecucionesActivas, setEjecucionesActivas] = useState([]) // [{ executionId, email, estado }]
-  const [otpActivo, setOtpActivo] = useState(null) // { executionId, email } | null
-  const [isExecuting, setIsExecuting] = useState(false) // Para desabilitar el boton mientras se ejecuta
-  const [verPantalla, setVerPantalla] = useState(false)
+  if (Array.isArray(backendInfo.ejecuciones)) {
+    return backendInfo.ejecuciones.map((execution) => ({
+      ...execution,
 
-  const badge = resolveBadge(caso.estado, liveStatus)
-  const isRunning = liveStatus === 'running'
+      executionId:
+        execution.executionId ||
+        execution.id ||
+        execution._id ||
+        execution.uuid,
+
+      estado:
+        execution.estado || execution.status || execution.state || "en_cola",
+
+      posicion: execution.posicion ?? execution.posicionCola,
+
+      total: execution.total ?? execution.totalCola,
+
+      esperaRestanteMs: Number(execution.esperaRestanteMs) || 0,
+
+      estimacionMs: Number(execution.estimacionMs) || 0,
+
+      estimacionTexto: execution.estimacionTexto || null,
+
+      email: execution.email || backendInfo.email || null,
+    }));
+  }
+
+  const executionId =
+    backendInfo.executionId ||
+    backendInfo.id ||
+    backendInfo._id ||
+    backendInfo.uuid;
+
+  if (!executionId) {
+    return [];
+  }
+
+  return [
+    {
+      ...backendInfo,
+
+      executionId,
+
+      email: backendInfo.email || null,
+
+      estado:
+        backendInfo.estado ||
+        backendInfo.status ||
+        backendInfo.state ||
+        "en_cola",
+
+      posicion: backendInfo.posicion ?? backendInfo.posicionCola,
+
+      total: backendInfo.total ?? backendInfo.totalCola,
+
+      esperaRestanteMs: Number(backendInfo.esperaRestanteMs) || 0,
+
+      estimacionMs: Number(backendInfo.estimacionMs) || 0,
+
+      estimacionTexto: backendInfo.estimacionTexto || null,
+    },
+  ];
+}
+
+export default function CaseRow({
+  caso,
+  liveStatus,
+  executionState,
+  configTemplate,
+  configSchema,
+  configEndpoint,
+  onRun,
+}) {
+  const [open, setOpen] = useState(false);
+
+  const [configOpen, setConfigOpen] = useState(false);
+
+  const resolvedConfig = caso.configTemplate ?? configTemplate ?? [];
+
+  const [config, setConfig] = useState(resolvedConfig);
+
+  const [ejecucionesActivas, setEjecucionesActivas] = useState([]);
+
+  const [otpActivo, setOtpActivo] = useState(null);
+
+  const [isExecuting, setIsExecuting] = useState(false);
+
+  const [verPantalla, setVerPantalla] = useState(false);
+
+  const queueState = executionState || null;
+
+  const schema = caso.configSchema ?? configSchema ?? null;
+
+  const badge = resolveBadge(caso.estado, liveStatus);
+
+  const isRunning = liveStatus === "running";
+
+  /*
+   * ID de ejecución.
+   *
+   * Primero usamos el que entrega App.jsx.
+   * Si todavía no existe, buscamos el de la
+   * ejecución local.
+   */
+  const executionId =
+    executionState?.executionId || ejecucionesActivas[0]?.executionId || null;
+
+  /*
+   * Estado real recibido desde App.jsx.
+   *
+   * Puede venir como:
+   * estado
+   * status
+   * state
+   */
+  const executionStatus = normalizeStatus(
+    executionState?.estado ||
+      executionState?.status ||
+      executionState?.state ||
+      executionState?.backendData?.estado ||
+      executionState?.backendData?.status ||
+      executionState?.backendData?.state,
+  );
+
+  /*
+   * Contador visual.
+   */
+  const [countdown, setCountdown] = useState(
+    Number(queueState?.esperaRestanteMs) || 0,
+  );
+
+  useEffect(() => {
+    const remaining = Number(queueState?.esperaRestanteMs) || 0;
+
+    setCountdown(Math.max(0, remaining));
+
+    if (remaining <= 0) {
+      return undefined;
+    }
+
+    const interval = setInterval(() => {
+      setCountdown((previous) => Math.max(0, previous - 1000));
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [queueState?.esperaRestanteMs]);
+
+  /*
+   * Sincroniza la ejecución local
+   * con el estado enviado por App.jsx.
+   */
+  useEffect(() => {
+    if (!executionState?.executionId) {
+      return;
+    }
+
+    const currentExecutionId = executionState.executionId;
+
+    const existing = ejecucionesActivas.find(
+      (item) => item.executionId === currentExecutionId,
+    );
+
+    const backendData = executionState.backendData || {};
+
+    const updatedExecution = {
+      ...(existing || {}),
+
+      executionId: currentExecutionId,
+
+      email:
+        existing?.email || executionState.email || backendData.email || null,
+
+      estado:
+        executionState.estado ||
+        executionState.status ||
+        executionState.state ||
+        backendData.estado ||
+        backendData.status ||
+        backendData.state ||
+        "en_cola",
+
+      posicion:
+        executionState.posicionCola ??
+        executionState.posicion ??
+        backendData.posicion ??
+        backendData.posicionCola ??
+        existing?.posicion,
+
+      total:
+        executionState.totalCola ??
+        executionState.total ??
+        backendData.total ??
+        backendData.totalCola ??
+        existing?.total,
+
+      esperaRestanteMs: Number(executionState.esperaRestanteMs) || 0,
+
+      estimacionMs:
+        Number(executionState.estimacionMs ?? backendData.estimacionMs) ||
+        existing?.estimacionMs ||
+        0,
+
+      estimacionTexto:
+        executionState.estimacionTexto ||
+        backendData.estimacionTexto ||
+        existing?.estimacionTexto ||
+        null,
+    };
+
+    setEjecucionesActivas((previous) => {
+      const withoutCurrent = previous.filter(
+        (item) => item.executionId !== currentExecutionId,
+      );
+
+      const normalizedStatus = normalizeStatus(updatedExecution.estado);
+
+      /*
+       * IMPORTANTE:
+       * NO eliminamos esperando_otp.
+       *
+       * La ejecución debe permanecer
+       * disponible mientras el usuario
+       * introduce el código.
+       */
+      if (ESTADOS_FINALIZADOS.includes(normalizedStatus)) {
+        return withoutCurrent;
+      }
+
+      return [...withoutCurrent, updatedExecution];
+    });
+  }, [executionState]);
+
+  /*
+   * ==========================================
+   * DETECCIÓN DEL OTP
+   * ==========================================
+   *
+   * Esta es la parte más importante.
+   *
+   * No dependemos únicamente de
+   * ejecucionesActivas.
+   *
+   * Si App.jsx dice:
+   *
+   * estado: "esperando_otp"
+   *
+   * abrimos directamente el modal.
+   */
+  useEffect(() => {
+    if (executionStatus !== "esperando_otp" || !executionId) {
+      return;
+    }
+
+    const backendData = executionState?.backendData || {};
+
+    const ejecucion = ejecucionesActivas.find(
+      (item) => item.executionId === executionId,
+    );
+
+    const email =
+      executionState?.email ||
+      ejecucion?.email ||
+      backendData.email ||
+      backendData.correo ||
+      backendData.emailTitular ||
+      null;
+
+    const otpExecution = {
+      ...(ejecucion || {}),
+
+      executionId,
+
+      email,
+
+      estado: "esperando_otp",
+    };
+
+    console.log("[OTP] Backend solicita código", otpExecution);
+
+    setOtpActivo((previous) => {
+      if (
+        previous?.executionId === executionId &&
+        previous?.estado === "esperando_otp"
+      ) {
+        return previous;
+      }
+
+      return otpExecution;
+    });
+  }, [executionStatus, executionId, executionState, ejecucionesActivas]);
+
+  /*
+   * Cerrar OTP cuando finalice
+   * correctamente la ejecución.
+   */
+  useEffect(() => {
+    if (!executionStatus || !ESTADOS_FINALIZADOS.includes(executionStatus)) {
+      return;
+    }
+
+    setOtpActivo(null);
+  }, [executionStatus]);
 
   function handleConfirmConfig(resultado) {
-  const configPayload =
-    resultado.payload ?? resultado
+    const configPayload = resultado.payload ?? resultado;
 
-  const backendInfo =
-    resultado.backend
+    const backendInfo = resultado.backend;
 
-  setConfig(configPayload)
-  setConfigOpen(false)
+    setConfig(configPayload);
 
-  onRun(
-    caso,
-    configPayload,
-    backendInfo
-  )
+    setConfigOpen(false);
 
-  if (backendInfo) {
-    const nuevas =
-      backendInfo.ejecuciones
-        ? backendInfo.ejecuciones.map(
-            (e) => ({
-              executionId:
-                e.executionId,
-              email: e.email,
-              estado: 'pendiente',
-            })
-          )
-        : [
-            {
-              executionId:
-                backendInfo.executionId,
-              email:
-                backendInfo.email,
-              estado: 'pendiente',
-            },
-          ]
+    onRun(caso, configPayload, backendInfo);
 
-    setEjecucionesActivas(nuevas)
+    const nuevas = extractExecutionList(backendInfo);
+
+    if (nuevas.length > 0) {
+      setEjecucionesActivas(nuevas);
+    }
   }
-}
 
-  // Ejecuta directamente con la configuracion guardada, enviando al backend primero
   async function handleDirectRun() {
     const endpoint = caso.configEndpoint ?? configEndpoint;
-    
+
     if (!endpoint) {
-      // Si no hay endpoint, ejecuta directamente sin backendInfo
       onRun(caso, config);
+
       return;
     }
 
     setIsExecuting(true);
+
     try {
       const response = await apiFetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: "POST",
+
+        headers: {
+          "Content-Type": "application/json",
+        },
+
         body: JSON.stringify(config),
       });
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error || `El servidor respondio ${response.status}`);
-      }
-      const backendInfo = data;
-      onRun(caso, config, backendInfo);
 
-      // Arma la lista de ejecuciones a monitorear
-      if (backendInfo) {
-        const nuevas = backendInfo.ejecuciones
-          ? backendInfo.ejecuciones.map((e) => ({ executionId: e.executionId, email: e.email, estado: 'pendiente' }))
-          : [{ executionId: backendInfo.executionId, email: backendInfo.email, estado: 'pendiente' }];
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.error || `El servidor respondió ${response.status}`,
+        );
+      }
+
+      onRun(caso, config, data);
+
+      const nuevas = extractExecutionList(data);
+
+      if (nuevas.length > 0) {
         setEjecucionesActivas(nuevas);
       }
     } catch (error) {
-      console.error('Error al ejecutar:', error);
-      alert('Error al ejecutar: ' + error.message);
+      console.error("Error al ejecutar:", error);
+
+      alert("Error al ejecutar: " + error.message);
     } finally {
       setIsExecuting(false);
     }
   }
-// Poll del estado de cada ejecucion activa. Cuando alguna llega a
-   // "esperando_otp" y todavia no se le mostro el modal, lo abre.
-   useEffect(() => {
-     if (ejecucionesActivas.length === 0) return
-     const interval = setInterval(async () => {
-       const actualizadas = await Promise.all(
-         ejecucionesActivas.map(async (ej) => {
-           try {
-             const res = await apiFetch(API_ENDPOINTS.PASAPORTES_ESTADO(ej.executionId))
-             const data = await res.json()
-             return { ...ej, estado: data.estado }
-           } catch {
-             return ej
-           }
-         })
-       )
-       setEjecucionesActivas(actualizadas)
 
-       if (!otpActivo) {
-         const siguiente = actualizadas.find((ej) => ej.estado === 'esperando_otp')
-         if (siguiente) setOtpActivo(siguiente)
-       }
+  function handleOtpSubmitted() {
+    /*
+     * No cerramos inmediatamente el modal
+     * basándonos solamente en el POST.
+     *
+     * App.jsx continuará haciendo polling.
+     *
+     * El modal se cerrará cuando el backend
+     * cambie el estado de la ejecución.
+     */
+    console.log("[OTP] Código enviado correctamente");
+  }
 
-       // Deja de monitorear las que ya terminaron
-       const todasTerminaron = actualizadas.every((ej) => ['exitoso', 'fallido', 'requiere_revision'].includes(ej.estado))
-       if (todasTerminaron) clearInterval(interval)
-     }, POLL_INTERVAL_MS)
-
-     return () => clearInterval(interval)
-   }, [ejecucionesActivas.length, otpActivo])
-
-
-
+  const queueMessage = getQueueMessage(queueState);
 
   return (
     <div className="case-row">
@@ -182,7 +549,7 @@ const schema =
             textAlign: "left",
             padding: 0,
           }}
-          onClick={() => setOpen((v) => !v)}
+          onClick={() => setOpen((value) => !value)}
         >
           <span
             className="icon-chevron"
@@ -192,8 +559,9 @@ const schema =
               display: "inline-block",
             }}
           />
+
           <span className="criterio">
-            {caso.criterio || caso.pasos.slice(0, 60)}
+            {caso.criterio || caso.pasos?.slice(0, 60)}
           </span>
         </button>
 
@@ -209,12 +577,17 @@ const schema =
           {caso.responsableEjecucion || "-"}
         </span>
 
-        <div style={{ display: "flex", gap: 6 }}>
+        <div
+          style={{
+            display: "flex",
+            gap: 6,
+          }}
+        >
           <button
             className="run-btn"
             aria-label={`Configurar datos de ${caso.id}`}
             title="Ver y editar los datos antes de ejecutar"
-            disabled={isRunning}
+            disabled={isRunning || isExecuting}
             onClick={() => setConfigOpen(true)}
           >
             <span className="icon-config" />
@@ -223,7 +596,7 @@ const schema =
           <button
             className="run-btn"
             aria-label={`Ejecutar ${caso.id}`}
-            title="Ejecutar con la ultima configuracion confirmada"
+            title="Ejecutar con la última configuración confirmada"
             disabled={isRunning || isExecuting}
             onClick={handleDirectRun}
           >
@@ -232,38 +605,108 @@ const schema =
         </div>
       </div>
 
+      {queueMessage && (
+        <div
+          style={{
+            margin: "0 16px 12px",
+            padding: "10px 12px",
+            border: "1px solid var(--border)",
+            borderRadius: "var(--radius-md)",
+            background: "var(--bg-secondary)",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              gap: 12,
+            }}
+          >
+            <div>
+              <strong
+                style={{
+                  fontSize: 13,
+                }}
+              >
+                {queueMessage.text}
+              </strong>
+
+              <div
+                style={{
+                  marginTop: 3,
+                  fontSize: 11,
+                  color: "var(--text-secondary)",
+                }}
+              >
+                {queueMessage.detail}
+              </div>
+            </div>
+
+            {countdown > 0 &&
+              (executionStatus === "en_cola" ||
+                executionStatus === "esperando_ventana") && (
+                <strong
+                  style={{
+                    fontFamily: "var(--font-mono)",
+                    fontSize: 14,
+                  }}
+                >
+                  {formatCountdown(countdown)}
+                </strong>
+              )}
+          </div>
+        </div>
+      )}
+
       {open && (
         <div className="case-detail">
           <div className="row">
             <span className="k">Pasos</span>
-            <span style={{ whiteSpace: "pre-line" }}>{caso.pasos}</span>
+
+            <span
+              style={{
+                whiteSpace: "pre-line",
+              }}
+            >
+              {caso.pasos}
+            </span>
           </div>
+
           {caso.componente && (
             <div className="row">
               <span className="k">Componente</span>
+
               <span>{caso.componente}</span>
             </div>
           )}
+
           {caso.fechaEjecucion && (
             <div className="row">
-              <span className="k">Ultima ejecucion</span>
+              <span className="k">Última ejecución</span>
+
               <span>{caso.fechaEjecucion}</span>
             </div>
           )}
+
           {caso.observacionError && (
             <div className="row">
-              <span className="k">Observacion</span>
+              <span className="k">Observación</span>
+
               <span className="error">{caso.observacionError}</span>
             </div>
           )}
+
           {caso.clasificacionError && (
             <div className="row">
               <span className="k">Severidad</span>
+
               <span>{caso.clasificacionError}</span>
             </div>
           )}
         </div>
       )}
+
       {ejecucionesActivas.length > 0 && (
         <div
           style={{
@@ -290,29 +733,29 @@ const schema =
             Ver pantalla en vivo
           </label>
 
-          {verPantalla && (
-            <LiveScreenViewer executionId={ejecucionesActivas[0].executionId} />
+          {verPantalla && executionId && (
+            <LiveScreenViewer executionId={executionId} />
           )}
         </div>
       )}
 
       <ConfigModal
-  isOpen={configOpen}
-  title={`${caso.id} — ${caso.criterio}`}
-  description="Complete los datos necesarios para ejecutar este caso de prueba."
-  initialData={config}
-  schema={caso.configSchema ?? null}
-  endpoint={caso.configEndpoint ?? configEndpoint}
-  onClose={() => setConfigOpen(false)}
-  onConfirm={handleConfirmConfig}
-/>
+        isOpen={configOpen}
+        title={`${caso.id} — ${caso.criterio}`}
+        description="Complete los datos necesarios para ejecutar este caso de prueba."
+        initialData={config}
+        schema={schema}
+        endpoint={caso.configEndpoint ?? configEndpoint}
+        onClose={() => setConfigOpen(false)}
+        onConfirm={handleConfirmConfig}
+      />
+
       <OtpModal
         isOpen={!!otpActivo}
         email={otpActivo?.email}
         executionId={otpActivo?.executionId}
-        apiBase={API_ENDPOINTS.PASAPORTES_BASE}
         onClose={() => setOtpActivo(null)}
-        onSubmitted={() => setOtpActivo(null)}
+        onSubmitted={handleOtpSubmitted}
       />
     </div>
   );
