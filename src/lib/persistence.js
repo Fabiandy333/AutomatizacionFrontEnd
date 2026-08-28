@@ -1,64 +1,79 @@
-const STORAGE_KEY = "qa-dashboard:active-executions:v1";
+const STORAGE_KEY = "qa-dashboard:active-executions:v2";
 
-function saveActive(entries, planId) {
+function readStore() {
   try {
-    const serializable = (entries || []).map((entry) => ({
-      key: entry.key,
-      executionId: entry.executionId,
-      seccionNombre: entry.seccionNombre,
-      casoId: entry.casoId,
-      casoTitulo: entry.casoTitulo,
-      startedAt: entry.startedAt,
-      configPayload: entry.configPayload,
-      environment: entry.environment,
-      status: entry.status,
-    }));
+    const raw = localStorage.getItem(STORAGE_KEY);
 
-    localStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify({
-        planId: planId ?? null,
-        executions: serializable,
-      }),
-    );
+    if (!raw) {
+      return {};
+    }
+
+    const parsed = JSON.parse(raw);
+
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch (error) {
+    console.warn("No se pudieron leer las ejecuciones activas:", error);
+
+    return {};
+  }
+}
+
+function writeStore(store) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
   } catch (error) {
     console.warn("No se pudo guardar las ejecuciones activas:", error);
   }
 }
 
-function loadActive() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-
-    if (!raw) {
-      return { planId: null, executions: [] };
-    }
-
-    const parsed = JSON.parse(raw);
-
-    if (!parsed || typeof parsed !== "object") {
-      return { planId: null, executions: [] };
-    }
-
-    const executions = Array.isArray(parsed.executions) ? parsed.executions : [];
-
-    return {
-      planId: parsed.planId ?? null,
-      executions,
-    };
-  } catch (error) {
-    console.warn("No se pudieron leer las ejecuciones activas:", error);
-
-    return { planId: null, executions: [] };
-  }
+function toSerializable(entry) {
+  return {
+    key: entry.key,
+    executionId: entry.executionId,
+    seccionNombre: entry.seccionNombre,
+    casoId: entry.casoId,
+    casoTitulo: entry.casoTitulo,
+    startedAt: entry.startedAt,
+    configPayload: entry.configPayload,
+    environment: entry.environment,
+    status: entry.status,
+  };
 }
 
-function clearActive() {
-  try {
-    localStorage.removeItem(STORAGE_KEY);
-  } catch (error) {
-    console.warn("No se pudo limpiar las ejecuciones activas:", error);
+function saveActive(planId, entries) {
+  if (!planId) {
+    return;
   }
+
+  const store = readStore();
+
+  store[planId] = {
+    executions: (entries || []).map(toSerializable),
+  };
+
+  writeStore(store);
+}
+
+function loadActive(planId) {
+  if (!planId) {
+    return [];
+  }
+
+  const store = readStore();
+
+  return Array.isArray(store[planId]?.executions) ? store[planId].executions : [];
+}
+
+function clearActive(planId) {
+  if (!planId) {
+    return;
+  }
+
+  const store = readStore();
+
+  delete store[planId];
+
+  writeStore(store);
 }
 
 export { saveActive, loadActive, clearActive };

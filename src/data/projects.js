@@ -82,15 +82,25 @@ export const projects = [
         id: 'pasaportes',
         nombre: 'Pasaportes',
         planes: [{ id: 'flujo-agendamiento', nombre: 'Flujo agendamiento', data: conPlantillas(pasaporte) }],
-        // pendiente de cargar el plan de casos
+      },
+      {
+        id: 'gmv',
+        nombre: 'Gestion movil de ventas',
+        planes: [],
       },
     ],
   },
-  { id: 'octoplus', nombre: 'Octoplus', planes: [] },
-  { id: 'directory', nombre: 'Directory', planes: [] },
-  { id: 'sms', nombre: 'SMS', planes: [ { id: 'flujo-login', nombre: 'Flujo Login', data: conPlantillas(sms) } ] },
-  { id: 'smartbot', nombre: 'SmartBot', planes: [] },
-  { id: 'tu-viaje', nombre: 'Tu Viaje', planes: [] },
+  {
+    id: 'playtech',
+    nombre: 'PlayTech',
+    subproyectos: [
+      { id: 'octoplus', nombre: 'Octoplus', planes: [] },
+      { id: 'directory', nombre: 'Directory', planes: [] },
+      { id: 'sms', nombre: 'SMS', planes: [ { id: 'flujo-login', nombre: 'Flujo Login', data: conPlantillas(sms) } ] },
+      { id: 'smartbot', nombre: 'SmartBot', planes: [] },
+      { id: 'tu-viaje', nombre: 'Tu Viaje', planes: [] },
+    ],
+  },
 ]
 
 // Helper: cuenta total de casos de un plan

@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
+import { useParams, useNavigate, Navigate } from "react-router-dom";
+
 import Sidebar from "./components/Sidebar";
 import MetaBar from "./components/MetaBar";
 import TestSection from "./components/TestSection";
@@ -11,20 +13,6 @@ import { apiFetch, API_ENDPOINTS, API_TOKEN } from "./config/api";
 import { saveActive, loadActive, clearActive } from "./lib/persistence";
 
 function findFirstPlan() {
-  try {
-    const persisted = loadActive();
-
-    if (persisted.planId) {
-      const saved = findPlanById(persisted.planId);
-
-      if (saved) {
-        return saved;
-      }
-    }
-  } catch {
-    // ignoramos errores de persistencia y usamos el primer plan
-  }
-
   for (const project of projects) {
     const plans = project.subproyectos
       ? project.subproyectos.flatMap((subproject) => subproject.planes)
@@ -110,6 +98,18 @@ function findPlanById(planId) {
   return null;
 }
 
+function planPath(plan) {
+  for (const project of projects) {
+    for (const sub of project.subproyectos || []) {
+      if (sub.planes.some((item) => item.id === plan.id)) {
+        return `/${project.id}/${sub.id}/${plan.id}`;
+      }
+    }
+  }
+
+  return `/${plan.id}`;
+}
+
 function findCasoByKey(seccionNombre, casoId) {
   for (const project of projects) {
     const plans = project.subproyectos
@@ -184,7 +184,11 @@ function normalizeExecutionData(data, fallback = {}) {
 }
 
 export default function App() {
-  const [selectedPlan, setSelectedPlan] = useState(findFirstPlan);
+  const { planId } = useParams();
+
+  const navigate = useNavigate();
+
+  const selectedPlan = planId ? findPlanById(planId) : null;
 
   const [liveStatuses, setLiveStatuses] = useState({});
 
@@ -344,16 +348,47 @@ export default function App() {
   }
 
   /*
-   * Al recargar la página, retoma las ejecuciones
-   * activas que se habían guardado, reconecta el
-   * streaming de logs y deja que el polling siga.
+   * Al cambiar de plan (navegación o recarga), limpia el
+   * estado del plan anterior y retoma las ejecuciones
+   * activas guardadas para el plan actual, reconectando
+   * el streaming de logs para que el polling siga.
    */
   useEffect(() => {
+    eventSourcesRef.current.forEach((source) => source.close());
+
+    eventSourcesRef.current.clear();
+
+    otpLoggeadoRef.current.clear();
+
+    setLiveStatuses({});
+
+    setLogsByExecution({});
+
+    setActiveExecutions([]);
+
+    setExecutionStates({});
+
+    setExecutionHistory([]);
+
+    setSelectedExecutionSummary(null);
+
+    setVisibleLogExecution(null);
+
+    if (typeof setLastExecutionRequest === "function") {
+      setLastExecutionRequest(null);
+    }
+
+    const plan = planId ? findPlanById(planId) : null;
+
+    if (!plan) {
+      return;
+    }
+
     hydratedRef.current = true;
 
-    const persisted = loadActive();
+    const persisted = loadActive(plan.id);
 
-    const restored = (persisted.executions || [])
+    const restored = (persisted || [])
       .map((item) => {
         if (!item.executionId) {
           return null;
@@ -404,12 +439,13 @@ export default function App() {
       connectToLogs(entry.executionId, entry.key, entry.casoId);
     });
 
-    setLiveStatuses((previous) => ({ ...previous, ...lives }));
+    setLiveStatuses(lives);
 
-    setExecutionStates((previous) => ({ ...previous, ...states }));
+    setExecutionStates(states);
 
     setActiveExecutions(restored);
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [planId]);
 
   /*
    * Guarda las ejecuciones activas en el navegador
@@ -426,7 +462,7 @@ export default function App() {
     }
 
     if (activeExecutions.length > 0) {
-      saveActive(activeExecutions, selectedPlan?.id);
+      saveActive(selectedPlan?.id, activeExecutions);
     }
   }, [activeExecutions, selectedPlan]);
 
@@ -561,7 +597,7 @@ export default function App() {
       setActiveExecutions(remaining);
 
       if (remaining.length === 0) {
-        clearActive();
+        clearActive(selectedPlan?.id);
       }
     }, 3000);
 
@@ -934,37 +970,25 @@ export default function App() {
     (status) => status === "running",
   ).length;
 
+  if (!selectedPlan) {
+    const firstPlan = findFirstPlan();
+
+    if (firstPlan) {
+      return <Navigate to={planPath(firstPlan)} replace />;
+    }
+  }
+
   return (
     <div className={`app-shell ${sidebarVisible ? "" : "collapsed"}`}>
       <Sidebar
         projects={projects}
         selectedPlanId={selectedPlan?.id}
         onSelectPlan={(plan) => {
-          eventSourcesRef.current.forEach((source) => source.close());
+          if (plan.id === planId) {
+            return;
+          }
 
-          eventSourcesRef.current.clear();
-
-          otpLoggeadoRef.current.clear();
-
-          clearActive();
-
-          setSelectedPlan(plan);
-
-          setLiveStatuses({});
-
-          setLogsByExecution({});
-
-          setActiveExecutions([]);
-
-          setExecutionStates({});
-
-          setExecutionHistory([]);
-
-          setSelectedExecutionSummary(null);
-
-          setVisibleLogExecution(null);
-
-          setLastExecutionRequest(null);
+          navigate(planPath(plan));
         }}
         onToggle={() => setSidebarVisible((value) => !value)}
         collapsed={!sidebarVisible}
