@@ -8,7 +8,23 @@ import { projects, contarCasos } from "./data/projects";
 
 import { apiFetch, API_ENDPOINTS, API_TOKEN } from "./config/api";
 
+import { saveActive, loadActive, clearActive } from "./lib/persistence";
+
 function findFirstPlan() {
+  try {
+    const persisted = loadActive();
+
+    if (persisted.planId) {
+      const saved = findPlanById(persisted.planId);
+
+      if (saved) {
+        return saved;
+      }
+    }
+  } catch {
+    // ignoramos errores de persistencia y usamos el primer plan
+  }
+
   for (const project of projects) {
     const plans = project.subproyectos
       ? project.subproyectos.flatMap((subproject) => subproject.planes)
@@ -72,6 +88,54 @@ function toLiveStatus(status) {
 
 function executionKey(seccion, caso, idx) {
   return `${seccion.nombre}-${caso.id}-${idx}`;
+}
+
+function findPlanById(planId) {
+  if (!planId) {
+    return null;
+  }
+
+  for (const project of projects) {
+    const plans = project.subproyectos
+      ? project.subproyectos.flatMap((sub) => sub.planes)
+      : project.planes || [];
+
+    const found = plans.find((plan) => plan.id === planId);
+
+    if (found) {
+      return found;
+    }
+  }
+
+  return null;
+}
+
+function findCasoByKey(seccionNombre, casoId) {
+  for (const project of projects) {
+    const plans = project.subproyectos
+      ? project.subproyectos.flatMap((sub) => sub.planes)
+      : project.planes || [];
+
+    for (const plan of plans) {
+      for (const seccion of plan?.data?.secciones || []) {
+        if (seccion.nombre !== seccionNombre) {
+          continue;
+        }
+
+        const caso = seccion.casos.find((item) => item.id === casoId);
+
+        if (caso) {
+          return {
+            seccion,
+            caso,
+            idx: seccion.casos.indexOf(caso),
+          };
+        }
+      }
+    }
+  }
+
+  return null;
 }
 
 function normalizeExecutionStatus(data) {
@@ -142,6 +206,8 @@ export default function App() {
   const eventSourcesRef = useRef(new Map());
 
   const otpLoggeadoRef = useRef(new Set());
+
+  const hydratedRef = useRef(false);
 
   const [visibleLogExecution, setVisibleLogExecution] = useState(null);
 
@@ -277,6 +343,93 @@ export default function App() {
     };
   }
 
+  /*
+   * Al recargar la página, retoma las ejecuciones
+   * activas que se habían guardado, reconecta el
+   * streaming de logs y deja que el polling siga.
+   */
+  useEffect(() => {
+    hydratedRef.current = true;
+
+    const persisted = loadActive();
+
+    const restored = (persisted.executions || [])
+      .map((item) => {
+        if (!item.executionId) {
+          return null;
+        }
+
+        const found = findCasoByKey(item.seccionNombre, item.casoId);
+
+        if (!found) {
+          return null;
+        }
+
+        return {
+          key: item.key,
+          executionId: item.executionId,
+          status: item.status || "en_cola",
+          estado: item.status || "en_cola",
+          startedAt: item.startedAt ? new Date(item.startedAt) : new Date(),
+          seccionNombre: item.seccionNombre,
+          casoId: item.casoId,
+          casoTitulo: item.casoTitulo,
+          caso: found.caso,
+          configPayload: item.configPayload,
+          environment: item.environment || import.meta.env.MODE || "QA",
+          backendData: {},
+        };
+      })
+      .filter(Boolean);
+
+    if (!restored.length) {
+      return;
+    }
+
+    const lives = {};
+    const states = {};
+
+    restored.forEach((entry) => {
+      lives[entry.key] = "running";
+
+      states[entry.key] = {
+        executionId: entry.executionId,
+        estado: entry.status || "en_cola",
+        status: entry.status || "en_cola",
+        backendData: {},
+        iniciadoEn: entry.startedAt.toISOString(),
+        finalizadoEn: null,
+      };
+
+      connectToLogs(entry.executionId, entry.key, entry.casoId);
+    });
+
+    setLiveStatuses((previous) => ({ ...previous, ...lives }));
+
+    setExecutionStates((previous) => ({ ...previous, ...states }));
+
+    setActiveExecutions(restored);
+  }, []);
+
+  /*
+   * Guarda las ejecuciones activas en el navegador
+   * para poder retomarlas si el usuario recarga.
+   *
+   * Solo guarda cuando hay ejecuciones activas; la
+   * limpieza se hace de forma explícita al terminar
+   * la última ejecución o al cambiar de plan (así no
+   * se borra nada antes de que la restauración corra).
+   */
+  useEffect(() => {
+    if (!hydratedRef.current) {
+      return;
+    }
+
+    if (activeExecutions.length > 0) {
+      saveActive(activeExecutions, selectedPlan?.id);
+    }
+  }, [activeExecutions, selectedPlan]);
+
   useEffect(() => {
     if (!activeExecutions.some((entry) => !isFinished(entry.status))) {
       return undefined;
@@ -406,6 +559,10 @@ export default function App() {
       const remaining = updated.filter((entry) => !isFinished(entry.status));
 
       setActiveExecutions(remaining);
+
+      if (remaining.length === 0) {
+        clearActive();
+      }
     }, 3000);
 
     return () => clearInterval(interval);
@@ -786,6 +943,10 @@ export default function App() {
           eventSourcesRef.current.forEach((source) => source.close());
 
           eventSourcesRef.current.clear();
+
+          otpLoggeadoRef.current.clear();
+
+          clearActive();
 
           setSelectedPlan(plan);
 
