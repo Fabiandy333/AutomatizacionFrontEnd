@@ -523,128 +523,63 @@ export default function CaseRow({
    *
    * abrimos directamente el modal.
    */
-  // useEffect(() => {
-  //   if (
-  //     executionStatus !==
-  //       "esperando_otp" ||
-  //     !executionId
-  //   ) {
-  //     return;
-  //   }
+  useEffect(() => {
+    if (
+      executionStatus !==
+        "esperando_otp" ||
+      !executionId
+    ) {
+      return;
+    }
 
-  //   const backendData =
-  //     executionState?.backendData || {};
+    const backendData =
+      executionState?.backendData || {};
 
-  //   const ejecucion =
-  //     ejecucionesActivas.find(
-  //       (item) =>
-  //         item.executionId ===
-  //         executionId,
-  //     );
+    const ejecucion =
+      ejecucionesActivas.find(
+        (item) =>
+          item.executionId ===
+          executionId,
+      ) || {};
 
-  //   const email =
-  //     executionState?.email ||
-  //     ejecucion?.email ||
-  //     backendData.email ||
-  //     backendData.correo ||
-  //     backendData.emailTitular ||
-  //     null;
-
-  //   const otpExecution = {
-  //     ...(ejecucion || {}),
-
-  //     executionId,
-
-  //     email,
-
-  //     estado: "esperando_otp",
-  //   };
-
-  //   console.log(
-  //     "[OTP] Backend solicita código",
-  //     otpExecution,
-  //   );
-
-  //   setOtpActivo(
-  //     (previous) => {
-  //       if (
-  //         previous?.executionId ===
-  //           executionId &&
-  //         previous?.estado ===
-  //           "esperando_otp"
-  //       ) {
-  //         return previous;
-  //       }
-
-  //       return otpExecution;
-  //     },
-  //   );
-  // }, [
-  //   executionStatus,
-  //   executionId,
-  //   executionState,
-  //   ejecucionesActivas,
-  // ]);
-/*
- * DEBUG / APERTURA DEL MODAL OTP
- */
-useEffect(() => {
-  console.log("========== OTP CHECK ==========");
-
-  const estado =
-    executionState?.estado ||
-    executionState?.status ||
-    executionState?.backendData?.estado ||
-    executionState?.backendData?.status;
-
-  console.log("Estado detectado:", estado);
-  console.log("Execution ID:", executionId);
-  console.log("ExecutionState:", executionState);
-  console.log("Ejecuciones activas:", ejecucionesActivas);
-
-  if (estado !== "esperando_otp") {
-    console.log(
-      "❌ No abre OTP: estado diferente de esperando_otp"
-    );
-    return;
-  }
-
-  if (!executionId) {
-    console.log(
-      "❌ No abre OTP: no existe executionId"
-    );
-    return;
-  }
-
-  const ejecucion = ejecucionesActivas.find(
-    (item) => item.executionId === executionId
-  );
-
-  const backendData = executionState?.backendData || {};
-
-  const otpExecution = {
-    ...(ejecucion || {}),
-
-    executionId,
-
-    email:
+    const email =
+      executionState?.email ||
       ejecucion?.email ||
       backendData.email ||
-      executionState?.email ||
-      null,
+      backendData.correo ||
+      backendData.emailTitular ||
+      null;
 
-    estado: "esperando_otp",
-  };
+    setOtpActivo(
+      (previous) => {
+        if (
+          previous?.executionId ===
+            executionId &&
+          previous?.estado ===
+            "esperando_otp"
+        ) {
+          return previous;
+        }
 
-  console.log("✅ ABRIENDO MODAL OTP");
-  console.log("otpExecution:", otpExecution);
+        const otpExecution = {
+          ...ejecucion,
 
-  setOtpActivo(otpExecution);
-}, [
-  executionState,
-  executionId,
-  ejecucionesActivas,
-]);
+          executionId,
+
+          email,
+
+          estado: "esperando_otp",
+        };
+
+        return otpExecution;
+      },
+    );
+  }, [
+    executionStatus,
+    executionId,
+    executionState,
+    ejecucionesActivas,
+  ]);
 
 
   /*
@@ -762,17 +697,22 @@ useEffect(() => {
 
   function handleOtpSubmitted() {
     /*
-     * No cerramos inmediatamente el modal
-     * basándonos solamente en el POST.
+     * El backend ya recibió el código OTP
+     * y continuará la automatización.
      *
-     * App.jsx continuará haciendo polling.
+     * Cerramos el modal inmediatamente para
+     * evitar que el usuario reenvíe el código
+     * (un segundo envío generaría un 409,
+     * porque la señal ya fue consumida).
      *
-     * El modal se cerrará cuando el backend
-     * cambie el estado de la ejecución.
+     * El estado de la ejecución seguirá
+     * llegando por polling.
      */
     console.log(
-      "[OTP] Código enviado correctamente",
+      "[OTP] Código enviado correctamente, cerrando modal",
     );
+
+    setOtpActivo(null);
   }
 
   const queueMessage =

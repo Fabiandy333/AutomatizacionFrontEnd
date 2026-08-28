@@ -141,6 +141,8 @@ export default function App() {
 
   const eventSourcesRef = useRef(new Map());
 
+  const otpLoggeadoRef = useRef(new Set());
+
   const [visibleLogExecution, setVisibleLogExecution] = useState(null);
 
   function appendLog(executionKeyValue, text, type = "info") {
@@ -211,26 +213,32 @@ export default function App() {
 
         executionId: entry.executionId,
 
-        status: status || entry.status,
+        status: entry.status || entry.estado,
 
-        estado: status || entry.status,
+        estado: entry.status || entry.estado,
 
         posicionCola:
-          data.posicionCola ?? previous[entry.key]?.posicionCola ?? null,
+          entry.backendData?.posicionCola ??
+          previous[entry.key]?.posicionCola ??
+          null,
 
-        totalCola: data.totalCola ?? previous[entry.key]?.totalCola ?? null,
+        totalCola: entry.backendData?.totalCola ??
+          previous[entry.key]?.totalCola ??
+          null,
 
-        esperaRestanteMs: Number(data.esperaRestanteMs) || 0,
+        esperaRestanteMs: Number(entry.backendData?.esperaRestanteMs) || 0,
 
-        ejecutando: data.ejecutando ?? false,
+        ejecutando: entry.backendData?.ejecutando ?? false,
 
-        iniciadoEn: data.iniciadoEn ?? null,
+        iniciadoEn: entry.backendData?.iniciadoEn ?? null,
 
-        finalizadoEn: data.finalizadoEn ?? null,
+        finalizadoEn: entry.backendData?.finalizadoEn ?? null,
 
-        esperandoOtp: Boolean(data.esperandoOtp || status === "esperando_otp"),
+        esperandoOtp: Boolean(
+          entry.backendData?.esperandoOtp || entry.status === "esperando_otp",
+        ),
 
-        backendData: data,
+        backendData: entry.backendData ?? previous[entry.key]?.backendData ?? {},
       },
     }));
   }
@@ -333,11 +341,15 @@ export default function App() {
             }));
 
             if (status === "esperando_otp" && entry.executionId) {
-              appendLog(
-                entry.key,
-                "El navegador está esperando el código OTP enviado al correo.",
-                "info",
-              );
+              if (!otpLoggeadoRef.current.has(entry.key)) {
+                otpLoggeadoRef.current.add(entry.key);
+
+                appendLog(
+                  entry.key,
+                  "El navegador está esperando el código OTP enviado al correo.",
+                  "info",
+                );
+              }
             }
 
             return {
@@ -378,6 +390,8 @@ export default function App() {
         eventSourcesRef.current.get(entry.key)?.close();
 
         eventSourcesRef.current.delete(entry.key);
+
+        otpLoggeadoRef.current.delete(entry.key);
 
         const finalStatus = toLiveStatus(entry.status);
 
