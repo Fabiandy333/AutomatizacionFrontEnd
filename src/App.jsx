@@ -190,6 +190,8 @@ export default function App() {
 
   const selectedPlan = planId ? findPlanById(planId) : null;
 
+  const selectedModulo = selectedPlan?.modulo || null;
+
   const [liveStatuses, setLiveStatuses] = useState({});
 
   const [logsByExecution, setLogsByExecution] = useState({});
@@ -313,15 +315,21 @@ export default function App() {
     }));
   }
 
-  function connectToLogs(executionId, statusKey, caseId) {
+  function connectToLogs(executionId, statusKey, caseId, modulo) {
     eventSourcesRef.current.get(statusKey)?.close();
+
+    const endpoints = API_ENDPOINTS.porModulo(modulo);
+
+    if (!endpoints?.sseLogs || !executionId) {
+      return;
+    }
 
     const tokenQuery = API_TOKEN
       ? `?token=${encodeURIComponent(API_TOKEN)}`
       : "";
 
     const eventSource = new EventSource(
-      `${API_ENDPOINTS.PASAPORTES_LOGS(executionId)}${tokenQuery}`,
+      `${endpoints.sseLogs(executionId)}${tokenQuery}`,
     );
 
     eventSourcesRef.current.set(statusKey, eventSource);
@@ -412,6 +420,7 @@ export default function App() {
           caso: found.caso,
           configPayload: item.configPayload,
           environment: item.environment || import.meta.env.MODE || "QA",
+          modulo: item.modulo || plan.modulo || null,
           backendData: {},
         };
       })
@@ -436,7 +445,7 @@ export default function App() {
         finalizadoEn: null,
       };
 
-      connectToLogs(entry.executionId, entry.key, entry.casoId);
+      connectToLogs(entry.executionId, entry.key, entry.casoId, entry.modulo || plan.modulo);
     });
 
     setLiveStatuses(lives);
@@ -483,9 +492,15 @@ export default function App() {
           }
 
           try {
-            const response = await apiFetch(
-              API_ENDPOINTS.PASAPORTES_ESTADO(entry.executionId),
+            const endpoints = API_ENDPOINTS.porModulo(
+              entry.modulo || selectedModulo,
             );
+
+            if (!endpoints?.estado) {
+              return entry;
+            }
+
+            const response = await apiFetch(endpoints.estado(entry.executionId));
 
             const data = await response.json();
 
@@ -602,7 +617,7 @@ export default function App() {
     }, 3000);
 
     return () => clearInterval(interval);
-  }, [activeExecutions]);
+  }, [activeExecutions, selectedModulo]);
 
   useEffect(() => {
     return () => {
@@ -680,6 +695,8 @@ export default function App() {
         execution?.environment ||
         import.meta.env.MODE ||
         "QA",
+
+      modulo: selectedModulo,
     };
 
     setExecutionStates((previous) => ({
@@ -755,7 +772,7 @@ export default function App() {
       executionEntry,
     ]);
 
-    connectToLogs(executionId, key, caso.id);
+    connectToLogs(executionId, key, caso.id, selectedModulo);
   }
 
   async function repeatLastExecution() {
@@ -1199,6 +1216,7 @@ export default function App() {
               <TestSection
                 key={seccion.nombre}
                 seccion={seccion}
+                modulo={selectedModulo}
                 liveStatuses={liveStatuses}
                 executionStates={executionStates}
                 onRunCase={runCase}

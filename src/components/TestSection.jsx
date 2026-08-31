@@ -9,6 +9,7 @@ function executionKey(seccion, caso, idx) {
 
 export default function TestSection({
   seccion,
+  modulo,
   liveStatuses,
   executionStates,
   onRunCase,
@@ -69,6 +70,7 @@ export default function TestSection({
             >
               <CaseRow
                 caso={caso}
+                modulo={modulo}
                 liveStatus={liveStatuses[key]}
                 executionState={executionState}
                 configTemplate={caso.configTemplate ?? seccion.configTemplate}

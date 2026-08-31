@@ -4,6 +4,7 @@ import { apiFetch, API_ENDPOINTS } from "../config/api";
 
 export default function OtpModal({
   isOpen,
+  modulo,
   email,
   executionId,
   onClose,
@@ -42,11 +43,21 @@ export default function OtpModal({
     setEnviando(true);
     setError(null);
 
+    const endpoints = API_ENDPOINTS.porModulo(modulo);
+
+    if (!endpoints?.otp) {
+      setError("Este plan no tiene un módulo backend configurado.");
+
+      setEnviando(false);
+
+      return;
+    }
+
     try {
       console.log("[OTP] Enviando código para ejecución:", executionId);
 
       const response = await apiFetch(
-        API_ENDPOINTS.PASAPORTES_OTP(executionId),
+        endpoints.otp(executionId),
         {
           method: "POST",
 

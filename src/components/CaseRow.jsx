@@ -274,6 +274,7 @@ function extractExecutionList(backendInfo) {
 
 export default function CaseRow({
   caso,
+  modulo,
   liveStatus,
   executionState,
   configTemplate,
@@ -1026,6 +1027,7 @@ export default function CaseRow({
 
       <OtpModal
         isOpen={!!otpActivo}
+        modulo={modulo}
         email={otpActivo?.email}
         executionId={
           otpActivo?.executionId

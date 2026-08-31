@@ -37,6 +37,7 @@ function toSerializable(entry) {
     configPayload: entry.configPayload,
     environment: entry.environment,
     status: entry.status,
+    modulo: entry.modulo,
   };
 }
 

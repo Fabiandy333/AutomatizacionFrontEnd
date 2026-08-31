@@ -5,6 +5,17 @@ const API_BASE_URL = import.meta.env.DEV
 export const API_TOKEN = import.meta.env.VITE_API_TOKEN || "";
 
 /**
+ * Nombres de módulo backend soportados. Cada plan de un proyecto
+ * indica a qué módulo pertenece (la ruta /api/<modulo>), así los
+ * logs en vivo y el polling funcionan por módulo y no hardcodeados
+ * a un solo proyecto.
+ */
+export const MODULOS = {
+  PASAPORTES: "pasaportes",
+  SMS: "sms",
+};
+
+/**
  * Cliente centralizado para realizar peticiones al backend.
  *
  * En desarrollo:
@@ -88,6 +99,41 @@ export const API_ENDPOINTS = {
 
   SMS_ESTADO: (executionId) =>
     `${API_BASE_URL}/api/sms/${encodeURIComponent(executionId)}/estado`,
+
+  /**
+   * Endpoints genéricos por módulo backend. El backend expone el
+   * mismo contrato para todos los módulos:
+   *
+   *   GET /api/<modulo>/:executionId/logs     (SSE en tiempo real)
+   *   GET /api/<modulo>/:executionId/log      (historial completo)
+   *   GET /api/<modulo>/:executionId/estado   (estado de la ejecución)
+   *   POST /api/<modulo>/:executionId/otp     (entregar código OTP)
+   *
+   * Devuelve undefined (o null) si el módulo no está soportado.
+   */
+  porModulo: (modulo) => {
+    const base = modulo ? `${API_BASE_URL}/api/${encodeURIComponent(modulo)}` : "";
+
+    if (!base) {
+      return null;
+    }
+
+    return {
+      base,
+
+      sseLogs: (executionId) =>
+        `${base}/${encodeURIComponent(executionId)}/logs`,
+
+      log: (executionId) =>
+        `${base}/${encodeURIComponent(executionId)}/log`,
+
+      estado: (executionId) =>
+        `${base}/${encodeURIComponent(executionId)}/estado`,
+
+      otp: (executionId) =>
+        `${base}/${encodeURIComponent(executionId)}/otp`,
+    };
+  },
 };
 
 export default API_BASE_URL;
