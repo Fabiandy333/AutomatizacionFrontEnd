@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
+import { useParams, useNavigate, Navigate } from "react-router-dom";
+
 import Sidebar from "./components/Sidebar";
 import MetaBar from "./components/MetaBar";
 import TestSection from "./components/TestSection";
@@ -7,6 +9,8 @@ import TestSection from "./components/TestSection";
 import { projects, contarCasos } from "./data/projects";
 
 import { apiFetch, API_ENDPOINTS, API_TOKEN } from "./config/api";
+
+import { saveActive, loadActive, clearActive } from "./lib/persistence";
 
 function findFirstPlan() {
   for (const project of projects) {
@@ -74,6 +78,66 @@ function executionKey(seccion, caso, idx) {
   return `${seccion.nombre}-${caso.id}-${idx}`;
 }
 
+function findPlanById(planId) {
+  if (!planId) {
+    return null;
+  }
+
+  for (const project of projects) {
+    const plans = project.subproyectos
+      ? project.subproyectos.flatMap((sub) => sub.planes)
+      : project.planes || [];
+
+    const found = plans.find((plan) => plan.id === planId);
+
+    if (found) {
+      return found;
+    }
+  }
+
+  return null;
+}
+
+function planPath(plan) {
+  for (const project of projects) {
+    for (const sub of project.subproyectos || []) {
+      if (sub.planes.some((item) => item.id === plan.id)) {
+        return `/${project.id}/${sub.id}/${plan.id}`;
+      }
+    }
+  }
+
+  return `/${plan.id}`;
+}
+
+function findCasoByKey(seccionNombre, casoId) {
+  for (const project of projects) {
+    const plans = project.subproyectos
+      ? project.subproyectos.flatMap((sub) => sub.planes)
+      : project.planes || [];
+
+    for (const plan of plans) {
+      for (const seccion of plan?.data?.secciones || []) {
+        if (seccion.nombre !== seccionNombre) {
+          continue;
+        }
+
+        const caso = seccion.casos.find((item) => item.id === casoId);
+
+        if (caso) {
+          return {
+            seccion,
+            caso,
+            idx: seccion.casos.indexOf(caso),
+          };
+        }
+      }
+    }
+  }
+
+  return null;
+}
+
 function normalizeExecutionStatus(data) {
   return (data?.estado || data?.status || data?.state || "en_cola")
     .toString()
@@ -120,7 +184,13 @@ function normalizeExecutionData(data, fallback = {}) {
 }
 
 export default function App() {
-  const [selectedPlan, setSelectedPlan] = useState(findFirstPlan);
+  const { planId } = useParams();
+
+  const navigate = useNavigate();
+
+  const selectedPlan = planId ? findPlanById(planId) : null;
+
+  const selectedModulo = selectedPlan?.modulo || null;
 
   const [liveStatuses, setLiveStatuses] = useState({});
 
@@ -140,6 +210,10 @@ export default function App() {
   const [executionStates, setExecutionStates] = useState({});
 
   const eventSourcesRef = useRef(new Map());
+
+  const otpLoggeadoRef = useRef(new Set());
+
+  const hydratedRef = useRef(false);
 
   const [visibleLogExecution, setVisibleLogExecution] = useState(null);
 
@@ -211,39 +285,51 @@ export default function App() {
 
         executionId: entry.executionId,
 
-        status: status || entry.status,
+        status: entry.status || entry.estado,
 
-        estado: status || entry.status,
+        estado: entry.status || entry.estado,
 
         posicionCola:
-          data.posicionCola ?? previous[entry.key]?.posicionCola ?? null,
+          entry.backendData?.posicionCola ??
+          previous[entry.key]?.posicionCola ??
+          null,
 
-        totalCola: data.totalCola ?? previous[entry.key]?.totalCola ?? null,
+        totalCola: entry.backendData?.totalCola ??
+          previous[entry.key]?.totalCola ??
+          null,
 
-        esperaRestanteMs: Number(data.esperaRestanteMs) || 0,
+        esperaRestanteMs: Number(entry.backendData?.esperaRestanteMs) || 0,
 
-        ejecutando: data.ejecutando ?? false,
+        ejecutando: entry.backendData?.ejecutando ?? false,
 
-        iniciadoEn: data.iniciadoEn ?? null,
+        iniciadoEn: entry.backendData?.iniciadoEn ?? null,
 
-        finalizadoEn: data.finalizadoEn ?? null,
+        finalizadoEn: entry.backendData?.finalizadoEn ?? null,
 
-        esperandoOtp: Boolean(data.esperandoOtp || status === "esperando_otp"),
+        esperandoOtp: Boolean(
+          entry.backendData?.esperandoOtp || entry.status === "esperando_otp",
+        ),
 
-        backendData: data,
+        backendData: entry.backendData ?? previous[entry.key]?.backendData ?? {},
       },
     }));
   }
 
-  function connectToLogs(executionId, statusKey, caseId) {
+  function connectToLogs(executionId, statusKey, caseId, modulo) {
     eventSourcesRef.current.get(statusKey)?.close();
+
+    const endpoints = API_ENDPOINTS.porModulo(modulo);
+
+    if (!endpoints?.sseLogs || !executionId) {
+      return;
+    }
 
     const tokenQuery = API_TOKEN
       ? `?token=${encodeURIComponent(API_TOKEN)}`
       : "";
 
     const eventSource = new EventSource(
-      `${API_ENDPOINTS.PASAPORTES_LOGS(executionId)}${tokenQuery}`,
+      `${endpoints.sseLogs(executionId)}${tokenQuery}`,
     );
 
     eventSourcesRef.current.set(statusKey, eventSource);
@@ -269,6 +355,126 @@ export default function App() {
     };
   }
 
+  /*
+   * Al cambiar de plan (navegación o recarga), limpia el
+   * estado del plan anterior y retoma las ejecuciones
+   * activas guardadas para el plan actual, reconectando
+   * el streaming de logs para que el polling siga.
+   */
+  useEffect(() => {
+    eventSourcesRef.current.forEach((source) => source.close());
+
+    eventSourcesRef.current.clear();
+
+    otpLoggeadoRef.current.clear();
+
+    setLiveStatuses({});
+
+    setLogsByExecution({});
+
+    setActiveExecutions([]);
+
+    setExecutionStates({});
+
+    setExecutionHistory([]);
+
+    setSelectedExecutionSummary(null);
+
+    setVisibleLogExecution(null);
+
+    if (typeof setLastExecutionRequest === "function") {
+      setLastExecutionRequest(null);
+    }
+
+    const plan = planId ? findPlanById(planId) : null;
+
+    if (!plan) {
+      return;
+    }
+
+    hydratedRef.current = true;
+
+    const persisted = loadActive(plan.id);
+
+    const restored = (persisted || [])
+      .map((item) => {
+        if (!item.executionId) {
+          return null;
+        }
+
+        const found = findCasoByKey(item.seccionNombre, item.casoId);
+
+        if (!found) {
+          return null;
+        }
+
+        return {
+          key: item.key,
+          executionId: item.executionId,
+          status: item.status || "en_cola",
+          estado: item.status || "en_cola",
+          startedAt: item.startedAt ? new Date(item.startedAt) : new Date(),
+          seccionNombre: item.seccionNombre,
+          casoId: item.casoId,
+          casoTitulo: item.casoTitulo,
+          caso: found.caso,
+          configPayload: item.configPayload,
+          environment: item.environment || import.meta.env.MODE || "QA",
+          modulo: item.modulo || plan.modulo || null,
+          backendData: {},
+        };
+      })
+      .filter(Boolean);
+
+    if (!restored.length) {
+      return;
+    }
+
+    const lives = {};
+    const states = {};
+
+    restored.forEach((entry) => {
+      lives[entry.key] = "running";
+
+      states[entry.key] = {
+        executionId: entry.executionId,
+        estado: entry.status || "en_cola",
+        status: entry.status || "en_cola",
+        backendData: {},
+        iniciadoEn: entry.startedAt.toISOString(),
+        finalizadoEn: null,
+      };
+
+      connectToLogs(entry.executionId, entry.key, entry.casoId, entry.modulo || plan.modulo);
+    });
+
+    setLiveStatuses(lives);
+
+    setExecutionStates(states);
+
+    setActiveExecutions(restored);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [planId]);
+
+  /*
+   * Guarda las ejecuciones activas en el navegador
+   * para poder retomarlas si el usuario recarga.
+   *
+   * Solo guarda cuando hay ejecuciones activas; la
+   * limpieza se hace de forma explícita al terminar
+   * la última ejecución o al cambiar de plan (así no
+   * se borra nada antes de que la restauración corra).
+   */
+  useEffect(() => {
+    if (!hydratedRef.current) {
+      return;
+    }
+
+    if (activeExecutions.length > 0) {
+      saveActive(selectedPlan?.id, activeExecutions);
+    }
+  }, [activeExecutions, selectedPlan]);
+
   useEffect(() => {
     if (!activeExecutions.some((entry) => !isFinished(entry.status))) {
       return undefined;
@@ -286,9 +492,15 @@ export default function App() {
           }
 
           try {
-            const response = await apiFetch(
-              API_ENDPOINTS.PASAPORTES_ESTADO(entry.executionId),
+            const endpoints = API_ENDPOINTS.porModulo(
+              entry.modulo || selectedModulo,
             );
+
+            if (!endpoints?.estado) {
+              return entry;
+            }
+
+            const response = await apiFetch(endpoints.estado(entry.executionId));
 
             const data = await response.json();
 
@@ -333,11 +545,15 @@ export default function App() {
             }));
 
             if (status === "esperando_otp" && entry.executionId) {
-              appendLog(
-                entry.key,
-                "El navegador está esperando el código OTP enviado al correo.",
-                "info",
-              );
+              if (!otpLoggeadoRef.current.has(entry.key)) {
+                otpLoggeadoRef.current.add(entry.key);
+
+                appendLog(
+                  entry.key,
+                  "El navegador está esperando el código OTP enviado al correo.",
+                  "info",
+                );
+              }
             }
 
             return {
@@ -379,6 +595,8 @@ export default function App() {
 
         eventSourcesRef.current.delete(entry.key);
 
+        otpLoggeadoRef.current.delete(entry.key);
+
         const finalStatus = toLiveStatus(entry.status);
 
         setLiveStatuses((previous) => ({
@@ -392,10 +610,14 @@ export default function App() {
       const remaining = updated.filter((entry) => !isFinished(entry.status));
 
       setActiveExecutions(remaining);
+
+      if (remaining.length === 0) {
+        clearActive(selectedPlan?.id);
+      }
     }, 3000);
 
     return () => clearInterval(interval);
-  }, [activeExecutions]);
+  }, [activeExecutions, selectedModulo]);
 
   useEffect(() => {
     return () => {
@@ -473,6 +695,8 @@ export default function App() {
         execution?.environment ||
         import.meta.env.MODE ||
         "QA",
+
+      modulo: selectedModulo,
     };
 
     setExecutionStates((previous) => ({
@@ -548,7 +772,7 @@ export default function App() {
       executionEntry,
     ]);
 
-    connectToLogs(executionId, key, caso.id);
+    connectToLogs(executionId, key, caso.id, selectedModulo);
   }
 
   async function repeatLastExecution() {
@@ -763,33 +987,25 @@ export default function App() {
     (status) => status === "running",
   ).length;
 
+  if (!selectedPlan) {
+    const firstPlan = findFirstPlan();
+
+    if (firstPlan) {
+      return <Navigate to={planPath(firstPlan)} replace />;
+    }
+  }
+
   return (
     <div className={`app-shell ${sidebarVisible ? "" : "collapsed"}`}>
       <Sidebar
         projects={projects}
         selectedPlanId={selectedPlan?.id}
         onSelectPlan={(plan) => {
-          eventSourcesRef.current.forEach((source) => source.close());
+          if (plan.id === planId) {
+            return;
+          }
 
-          eventSourcesRef.current.clear();
-
-          setSelectedPlan(plan);
-
-          setLiveStatuses({});
-
-          setLogsByExecution({});
-
-          setActiveExecutions([]);
-
-          setExecutionStates({});
-
-          setExecutionHistory([]);
-
-          setSelectedExecutionSummary(null);
-
-          setVisibleLogExecution(null);
-
-          setLastExecutionRequest(null);
+          navigate(planPath(plan));
         }}
         onToggle={() => setSidebarVisible((value) => !value)}
         collapsed={!sidebarVisible}
@@ -1000,6 +1216,7 @@ export default function App() {
               <TestSection
                 key={seccion.nombre}
                 seccion={seccion}
+                modulo={selectedModulo}
                 liveStatuses={liveStatuses}
                 executionStates={executionStates}
                 onRunCase={runCase}

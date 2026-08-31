@@ -6,6 +6,7 @@ import {
   configTemplatesPorSeccion,
   endpointsPorSeccion
 } from './templates'
+import { MODULOS } from '../config/api'
 
 // Cada "plan" representa un archivo de casos de prueba (uno por hoja/CSV
 // exportado del plan de pruebas). Para agregar un nuevo plan:
@@ -81,16 +82,26 @@ export const projects = [
       {
         id: 'pasaportes',
         nombre: 'Pasaportes',
-        planes: [{ id: 'flujo-agendamiento', nombre: 'Flujo agendamiento', data: conPlantillas(pasaporte) }],
-        // pendiente de cargar el plan de casos
+        planes: [{ id: 'flujo-agendamiento', nombre: 'Flujo agendamiento', modulo: MODULOS.PASAPORTES, data: conPlantillas(pasaporte) }],
+      },
+      {
+        id: 'gmv',
+        nombre: 'Gestion movil de ventas',
+        planes: [],
       },
     ],
   },
-  { id: 'octoplus', nombre: 'Octoplus', planes: [] },
-  { id: 'directory', nombre: 'Directory', planes: [] },
-  { id: 'sms', nombre: 'SMS', planes: [ { id: 'flujo-login', nombre: 'Flujo Login', data: conPlantillas(sms) } ] },
-  { id: 'smartbot', nombre: 'SmartBot', planes: [] },
-  { id: 'tu-viaje', nombre: 'Tu Viaje', planes: [] },
+  {
+    id: 'playtech',
+    nombre: 'PlayTech',
+    subproyectos: [
+      { id: 'octoplus', nombre: 'Octoplus', planes: [] },
+      { id: 'directory', nombre: 'Directory', planes: [] },
+      { id: 'sms', nombre: 'SMS', planes: [ { id: 'flujo-login', nombre: 'Flujo Login', modulo: MODULOS.SMS, data: conPlantillas(sms) } ] },
+      { id: 'smartbot', nombre: 'SmartBot', planes: [] },
+      { id: 'tu-viaje', nombre: 'Tu Viaje', planes: [] },
+    ],
+  },
 ]
 
 // Helper: cuenta total de casos de un plan
