@@ -100,6 +100,8 @@ export const API_ENDPOINTS = {
   SMS_ESTADO: (executionId) =>
     `${API_BASE_URL}/api/sms/${encodeURIComponent(executionId)}/estado`,
 
+  AUTH_LOGIN: '/api/auth/login',
+
   /**
    * Endpoints genéricos por módulo backend. El backend expone el
    * mismo contrato para todos los módulos:

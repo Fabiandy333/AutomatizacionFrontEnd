@@ -5,6 +5,7 @@ import OtpModal from "./OtpModal";
 import LiveScreenViewer from "./LiveScreenViewer";
 
 import { apiFetch, API_ENDPOINTS } from "../config/api";
+import { useAuth } from "../context/AuthContext";
 
 const ESTADOS_FINALIZADOS = [
   "exitoso",
@@ -282,6 +283,10 @@ export default function CaseRow({
   configEndpoint,
   onRun,
 }) {
+  const { tienePermiso } = useAuth();
+  const puedeEjecutar = tienePermiso("ejecutar");
+  const puedeConfigurar = tienePermiso("configurar");
+
   const [open, setOpen] = useState(false);
 
   const [configOpen, setConfigOpen] =
@@ -787,35 +792,52 @@ export default function CaseRow({
             gap: 6,
           }}
         >
-          <button
-            className="run-btn"
-            aria-label={`Configurar datos de ${caso.id}`}
-            title="Ver y editar los datos antes de ejecutar"
-            disabled={
-              isRunning ||
-              isExecuting
-            }
-            onClick={() =>
-              setConfigOpen(true)
-            }
-          >
-            <span className="icon-config" />
-          </button>
+          {puedeConfigurar && (
+            <button
+              className="run-btn"
+              aria-label={`Configurar datos de ${caso.id}`}
+              title="Ver y editar los datos antes de ejecutar"
+              disabled={
+                isRunning ||
+                isExecuting
+              }
+              onClick={() =>
+                setConfigOpen(true)
+              }
+            >
+              <span className="icon-config" />
+            </button>
+          )}
 
-          <button
-            className="run-btn"
-            aria-label={`Ejecutar ${caso.id}`}
-            title="Ejecutar con la última configuración confirmada"
-            disabled={
-              isRunning ||
-              isExecuting
-            }
-            onClick={
-              handleDirectRun
-            }
-          >
-            <span className="icon-play" />
-          </button>
+          {puedeEjecutar && (
+            <button
+              className="run-btn"
+              aria-label={`Ejecutar ${caso.id}`}
+              title="Ejecutar con la última configuración confirmada"
+              disabled={
+                isRunning ||
+                isExecuting
+              }
+              onClick={
+                handleDirectRun
+              }
+            >
+              <span className="icon-play" />
+            </button>
+          )}
+
+          {!puedeEjecutar && !puedeConfigurar && (
+            <span
+              style={{
+                fontSize: "11px",
+                color: "var(--text-muted, #64748b)",
+                alignSelf: "center",
+                padding: "4px 8px",
+              }}
+            >
+              Solo lectura
+            </span>
+          )}
         </div>
       </div>
 
